@@ -1,0 +1,16 @@
+[
+    {
+        "hyperparameters": {
+            "prompts": {
+                "good image": 1,
+                "bad anatomy": -1
+            },
+            "beta": 0.1,
+            "action_num": 4,
+            "weighting": "tanh",
+            "sample_step": 1,
+            "tau": 0.1
+        },
+        "score": 0.07355775868733724
+    }
+]
