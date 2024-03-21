@@ -1,0 +1,114 @@
+I have some hyperparameter lists along with their corresponding scores. 
+The lists are arranged in ascending order based on their scores, where higher scores indicate better quality.
+
+{history}
+
+Hyperparameters Configuration:
+
+This configuration specifies the settings for guiding the image generation process using a diffusion model. Each key-value pair defines a specific aspect of the generation process:
+
+- "prompts": This is a dictionary where the keys are text prompts that describe the desired characteristics or features in the generated image, and the values are floats representing the weight of each prompt. Positive weights encourage the appearance of the described feature, while negative weights discourage it. It's crucial to balance the specificity and breadth of your prompts to guide the image generation effectively.
+
+    Concatenating Prompts to Reduce Penalty: To optimize the performance and potentially reduce penalties associated with the number of prompts, consider concatenating similar or related prompts. For example, instead of having separate entries like [('A', 2.5), ('B', 2.5)], you can combine them into a single prompt with a unified weight: [('A, B', 2.5)]. This approach allows you to maintain the influence of both characteristics while treating them as a single prompt, thus lowering the penalty calculated based on the number of prompts used. This technique can be particularly useful when you want to encourage multiple features simultaneously without overly complicating the hyperparameter configuration.
+
+    Utilizing prompt concatenation effectively requires a thoughtful consideration of which features can be logically combined without diluting their individual impacts. The goal is to strike a balance between descriptive precision and the simplicity of your hyperparameter setup, aiming to maximize the aesthetic quality of the generated images while minimizing penalties.
+
+- "beta": A float value that controls the noise level of Brownian Motion in the image generation process. Higher values mean more noise, which can affect the clarity and details of the images.
+
+- "action_num": An integer specifying the number of potential steps to consider in an SDE (Stochastic Differential Equation) step. This parameter influences the diversity and exploration of the generated images.
+
+- "weighting": A string that indicates how the steps of the SDE process are combined. It can be either "tanh" or "boltzmann", influencing the selection based on the energy or probability distribution of the steps.
+
+- "sample_step": An integer that sets the number of steps to sample in the SDE process, affecting the resolution and detail of the generated images.
+
+- "tau": A float representing the temperature for the Boltzmann distribution or tanh function, affecting the randomness of step selection. Lower temperatures lead to more deterministic selections based on step energy or probability.
+
+Note: Setting "tau" to 0 and "weighting" to "boltzmann" results in the process choosing the step with the maximum energy state, making the outcome more deterministic.
+
+To evaluate the effectiveness of your hyperparameters, especially the `prompts`, we use the provided `scoring_hyperparameters` function. This function calculates the average aesthetic score across a predefined set of animals, with the score being a float value between 0 and 10. A higher score indicates a better aesthetic quality of the generated images.
+
+
+```python
+def scoring_hyperparameters(hyperparameters):
+    def reward(x):
+        return aesthetic_scorer(from_latent_to_pil(x)).item()
+    score_sum = 0
+    bar = tqdm(animals)
+    for animal in bar:
+        latent = demon_sampling(
+            get_init_latent(),
+            reward, 
+            {{animal: 5, **hyperparameters["prompts"]}},
+            hyperparameters["beta"],
+            hyperparameters["tau"],
+            hyperparameters["action_num"], 
+            hyperparameters["sample_step"], 
+            hyperparameters["weighting"]
+        )
+        pil = from_latent_to_pil(latent)
+        current_score = aesthetic_scorer(pil).item()
+        score_sum += current_score
+        bar.set_description(f"Current score for {{animal}}: {{current_score}}")
+    score_mean = score_sum / len(animals)
+    return score_mean - (len(hyperparameters["prompts"]) + 1) * hyperparameters["action_num"] * hyperparameters["sample_step"] / 1000
+```
+
+The animals list is as follows:
+```
+cat
+dog
+horse
+monkey
+rabbit
+zebra
+spider
+bird
+sheep
+deer
+cow
+goat
+lion
+tiger
+bear
+raccoon
+fox
+wolf
+lizard
+beetle
+ant
+butterfly
+fish
+shark
+whale
+dolphin
+squirrel
+mouse
+rat
+snake
+turtle
+frog
+chicken
+duck
+goose
+bee
+pig
+turkey
+fly
+llama
+camel
+bat
+gorilla
+hedgehog
+kangaroo
+```
+
+The scoring process involves the following steps:
+
+1. For each animal in the predefined list, a unique image is generated using the `demon_sampling` function, which incorporates your hyperparameters.
+2. The aesthetic quality of each generated image is assessed, resulting in an aesthetic score.
+3. The scores for all animals are averaged to determine the overall effectiveness of your hyperparameters.
+4. The final score is adjusted based on the number of prompts you've used and the complexity of the generation process, as defined by the `action_num` and `sample_step` hyperparameters. Specifically, the adjustment subtracts a penalty from the average score, with the penalty calculated as:
+`(len(hyperparameters["prompts"]) + 1) * hyperparameters["action_num"] * hyperparameters["sample_step"] / 1000`.
+
+
+Create new and unique prompts in JSON format, aiming for the highest possible score. Experiment with different configurations to enhance performance

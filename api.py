@@ -6,7 +6,7 @@ from utils import get_embedding, sdeint, from_latent_to_pil, from_pil_to_latent
 
 from tqdm import tqdm
 
-latent_sde = LatentSDEModel(beta=0)
+latent_sde = LatentSDEModel(beta=0).to('cuda')
 empty_text_embedding = get_embedding("")
 
 
@@ -22,18 +22,20 @@ def get_f_g(t, x, prompts):
 @torch.inference_mode()
 def sde_step(x, next_t, t, prompts, z):
     assert x.shape[0] == 1
+    # Note: z may have more batch dimensions than x
     dt = next_t - t
     rand_term = z * torch.sqrt(torch.abs(dt))
 
     f1, g1 = get_f_g(t, x, prompts)
-    x_pred = x + f1 * dt + g1 * rand_term
+    x_pred = x + f1 * dt + g1 * rand_term # Expand x to match z's shape
     f2, g2 = get_f_g(next_t, x_pred, prompts)
     x = x + 0.5 * (f1 + f2) * dt + 0.5 * (g1 + g2) * rand_term
     return x
 
-
 @torch.inference_mode()
 def odeint(x, start_t, ts, prompts):
+    if len(ts) > 25:
+        ts = latent_sde.get_timesteps(25, start_time=ts[0])
     prev_t = start_t
     for t in ts:
         dt = t - prev_t
@@ -45,7 +47,7 @@ def odeint(x, start_t, ts, prompts):
     return x
 
 @torch.inference_mode()
-def demon_sampling(x, energy_fn, text_weight_pair, beta, tau, action_num, sample_step, weighting="tanh"):
+def demon_sampling(x, energy_fn, text_weight_pair, beta, tau, action_num, sample_step, weighting="spin", log_dir=None):
     assert x.shape[0] == 1
     latent_sde.change_noise(beta=beta)
     ts = latent_sde.get_timesteps(sample_step, 1., 0.)
@@ -62,12 +64,20 @@ def demon_sampling(x, energy_fn, text_weight_pair, beta, tau, action_num, sample
         latent_sde.ode_mode_revert()
 
         values = torch.tensor([energy_fn(candidate_0[i].unsqueeze(0)) for i in range(action_num)])
+        
+        if log_dir is not None:
+            # Append values.mean().item() and values.std().item() to {log_dir}/sample_hist.txt
+            with open(f"{log_dir}/expected_energy.txt", "a") as f:
+                f.write(f"{values.mean().item()} {values.std().item()} {latent_sde.karras.sigma(t.item())}\n")
+
         values = values - values.mean()
         
-        if weighting == "tanh":
+        if weighting == "spin":
             weights = torch.tanh(values / tau).to(x.device)
         elif weighting == "boltzmann":
             weights = F.softmax(values / tau, dim=0).to(x.device)
+        else:
+            raise ValueError(f"Unknown weighting: {weighting}")
 
         z = F.normalize((zs * weights.view(-1, 1, 1, 1)).sum(dim=0, keepdim=True), dim=(0, 1, 2, 3)) # (1, C, H, W)
         z *= x.numel()**0.5
@@ -85,36 +95,3 @@ def get_init_latent():
     return latent_sde.prepare_initial_latents()
 
 
-if __name__ == "__main__":
-    """
-    prompts = [
-        ("A shota boy's hand", 1),
-        ("bad anatomy", -1)
-    ]
-    init_latent = get_init_latent()
-    latents_0 = [
-        latent_diffusion(init_latent, 1, 0, prompts, beta=0.1) for _ in range(4)
-    ]
-
-    imgs = [
-        from_latent_to_pil(latent) for latent in latents_0
-    ]
-
-    print(get_description(["Which one best fits a drawing of a hand, or if the hand is not drawn incorrectly?", *imgs]))
-
-    for i in range(4):
-        imgs[i].save(f'test_img/{i}.png')
-    """
-    prompts = [
-        ("A boy's hand", 1),
-        ("bad anatomy", -1) # negative weight to discourage bad anatomy
-    ]
-    init_latent = get_init_latent()
-    latents_0 = latent_diffusion(init_latent, 1, 0, prompts, beta=0.1)
-
-    latents_half = add_noise(latents_0, 0.7)
-    latent_0_edit = latent_diffusion(latents_half, 0.7, 0, prompts, beta=0)
-
-    img = from_latent_to_pil(latent_0_edit)
-
-    print(get_description(["Describe the image", img]))
