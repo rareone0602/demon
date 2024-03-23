@@ -58,7 +58,7 @@ animals = read_animals('assets/common_animals.txt')[:10]
 torch.manual_seed(42)
 fixed_latents = [get_init_latent() for _ in range(len(animals))]
 
-for key, options in [('action_num', [2, 8, 16]), ('sample_step', [32, 64, 128])]:
+for key, options in [('sample_step', [32, 64, 128])]:
     for option in options:
         current_hyperparameters[key] = option
         for weighting in ["spin", "boltzmann"]:

@@ -24,7 +24,7 @@ def format_check(hyperparameters):
       },
       "beta": 0.1,
       "action_num": 4,
-      "weighting": "tanh",
+      "weighting": "spin",
       "sample_step": 25,
       "tau": 0.1
     }
@@ -97,7 +97,7 @@ if __name__ == "__main__":
             },
             "beta": 0.1,
             "action_num": 8,
-            "weighting": "tanh",
+            "weighting": "spin",
             "sample_step": 25,
             "tau": 0.1
         },
@@ -110,7 +110,7 @@ if __name__ == "__main__":
             },
             "beta": 0.1,
             "action_num": 16,
-            "weighting": "tanh",
+            "weighting": "spin",
             "sample_step": 25,
             "tau": 0.1
         },
@@ -124,7 +124,7 @@ if __name__ == "__main__":
             },
             "beta": 0.1,
             "action_num": 32,
-            "weighting": "tanh",
+            "weighting": "spin",
             "sample_step": 25,
             "tau": 0.1
         },

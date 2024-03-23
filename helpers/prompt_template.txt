@@ -21,7 +21,7 @@ This configuration specifies the settings for guiding the image generation proce
 
 - "sample_step": An integer that sets the number of steps to sample in the SDE process, affecting the resolution and detail of the generated images.
 
-- "tau": A float representing the temperature for the Boltzmann distribution or tanh function, affecting the randomness of step selection. Lower temperatures lead to more deterministic selections based on step energy or probability.
+- "tau": A float representing the temperature for the Boltzmann distribution or tanh function (for 'spin' weighting), affecting the randomness of step selection. Lower temperatures lead to more deterministic selections based on step energy or probability.
 
 Note: Setting "tau" to 0 and "weighting" to "boltzmann" results in the process choosing the step with the maximum energy state, making the outcome more deterministic.
 
