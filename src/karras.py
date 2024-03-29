@@ -4,7 +4,6 @@ import numpy as np
 
 from diffusers import KDPM2DiscreteScheduler, UNet2DConditionModel
 from scipy.interpolate import InterpolatedUnivariateSpline
-from utils import get_embedding
 
 def to_float(t):
     """Convert supported types to float.
@@ -96,13 +95,13 @@ class LatentSDEModel(nn.Module):
     """
     Stochastic Differential Equation model
     """
-    def __init__(self, beta='anderson', const=None):
+    def __init__(self, beta='anderson', const=None, path='CompVis/stable-diffusion-v1-4'):
         super().__init__()
-        unet = UNet2DConditionModel.from_pretrained('CompVis/stable-diffusion-v1-4', subfolder='unet').to('cuda')
-        scheduler = KDPM2DiscreteScheduler.from_pretrained("CompVis/stable-diffusion-v1-4", subfolder='scheduler')
+        unet = UNet2DConditionModel.from_pretrained(path, subfolder='unet').to('cuda')
+        scheduler = KDPM2DiscreteScheduler.from_pretrained(path, subfolder='scheduler')
         
         # unet = UNet2DConditionModel.from_pretrained('stablediffusionapi/anything-v5', subfolder='unet').to('cuda')
-        # unet.load_state_dict(torch.load('assets/unet_state_dict_5.pt'))
+        # unet.load_state_dict(torch.load('assets/unet_state_dict.pt'))
         # scheduler = KDPM2DiscreteScheduler.from_pretrained("stablediffusionapi/anything-v5", subfolder='scheduler')
         
         self.init_noise_sigma = scheduler.init_noise_sigma

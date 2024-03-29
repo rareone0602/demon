@@ -2,9 +2,7 @@ import torch
 import torch.nn.functional as F
 
 from karras import LatentSDEModel
-from utils import get_embedding, sdeint, from_latent_to_pil, from_pil_to_latent
-
-from tqdm import tqdm
+from utils import get_embedding, from_latent_to_pil, from_pil_to_latent
 
 latent_sde = LatentSDEModel(beta=0).to('cuda')
 empty_text_embedding = get_embedding("")
@@ -33,7 +31,7 @@ def sde_step(x, next_t, t, prompts, z):
     return x
 
 @torch.inference_mode()
-def odeint(x, start_t, ts, prompts):
+def odeint_rest(x, start_t, ts, prompts):
     if len(ts) > 25:
         ts = latent_sde.get_timesteps(25, start_time=ts[0])
     prev_t = start_t
@@ -47,20 +45,50 @@ def odeint(x, start_t, ts, prompts):
     return x
 
 @torch.inference_mode()
-def demon_sampling(x, energy_fn, text_weight_pair, beta, tau, action_num, sample_step, weighting="spin", log_dir=None):
-    assert x.shape[0] == 1
-    latent_sde.change_noise(beta=beta)
+def odeint(x, text_weight_pair, sample_step):
     ts = latent_sde.get_timesteps(sample_step, 1., 0.)
     prompts = [
         (get_embedding(prompt), weight) for prompt, weight in text_weight_pair.items()
     ]
     prev_t = 1
+    return odeint_rest(x, prev_t, ts, prompts)
+
+
+@torch.inference_mode()
+def sdeint(x, text_weight_pair, beta, sample_step, start_t=1., end_t=0.):
+    latent_sde.change_noise(beta=beta)
+    ts = latent_sde.get_timesteps(sample_step, start_t, end_t)
+    prompts = [
+        (get_embedding(prompt), weight) for prompt, weight in text_weight_pair.items()
+    ]
+    prev_t = start_t
+    for t in ts:
+        dt = t - prev_t
+        z = torch.randn_like(x)
+        rand_term = z * torch.sqrt(torch.abs(dt))
+        f1, g1 = get_f_g(prev_t, x, prompts)
+        x_pred = x + f1 * dt + g1 * rand_term
+        f2, g2 = get_f_g(t, x_pred, prompts)
+        x = x + 0.5 * (f1 + f2) * dt + 0.5 * (g1 + g2) * rand_term
+        prev_t = t
+    return x
+
+
+@torch.inference_mode()
+def demon_sampling(x, energy_fn, text_weight_pair, beta, tau, action_num, sample_step, weighting="spin", log_dir=None, start_t=1., end_t=0.):
+    assert x.shape[0] == 1
+    latent_sde.change_noise(beta=beta)
+    ts = latent_sde.get_timesteps(sample_step, start_t, end_t)
+    prompts = [
+        (get_embedding(prompt), weight) for prompt, weight in text_weight_pair.items()
+    ]
+    prev_t = start_t
     while len(ts) > 0:
         t, ts = ts[0], ts[1:]
         zs = torch.randn(action_num, *x.shape[1:]).to(x.device)
         next_x = sde_step(x, t, prev_t, prompts, zs)
         latent_sde.ode_mode()
-        candidate_0 = odeint(next_x, t, ts, prompts)
+        candidate_0 = odeint_rest(next_x, t, ts, prompts)
         latent_sde.ode_mode_revert()
 
         values = torch.tensor([energy_fn(candidate_0[i].unsqueeze(0)) for i in range(action_num)])
@@ -89,6 +117,7 @@ def demon_sampling(x, energy_fn, text_weight_pair, beta, tau, action_num, sample
 
 def add_noise(latent, t):
     z = torch.randn_like(latent)
+    print(f"Sigma = {latent_sde.karras.sigma(t)}")
     return latent + z * latent_sde.karras.sigma(t)
 
 def get_init_latent():

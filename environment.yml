@@ -2,13 +2,14 @@ name: llm_prompt
 channels:
   - pytorch
   - nvidia
+  - conda-forge
   - defaults
 dependencies:
   - _libgcc_mutex=0.1
   - _openmp_mutex=5.1
   - blas=1.0
   - bzip2=1.0.8
-  - ca-certificates=2023.12.12
+  - ca-certificates=2024.2.2
   - certifi=2024.2.2
   - cuda-cudart=12.1.105
   - cuda-cupti=12.1.105
@@ -19,6 +20,7 @@ dependencies:
   - cuda-runtime=12.1.0
   - ffmpeg=4.3
   - filelock=3.13.1
+  - fire=0.6.0
   - freetype=2.12.1
   - gmp=6.2.1
   - gmpy2=2.1.2
@@ -81,9 +83,11 @@ dependencies:
   - requests=2.31.0
   - scipy=1.11.4
   - setuptools=68.2.2
+  - six=1.16.0
   - sqlite=3.41.2
   - sympy=1.12
   - tbb=2021.8.0
+  - termcolor=2.4.0
   - tk=8.6.12
   - torchaudio=2.2.1
   - torchtriton=2.2.0

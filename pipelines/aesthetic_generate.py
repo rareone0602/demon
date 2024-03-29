@@ -3,7 +3,7 @@ import fire
 import json
 import os
 from api import add_noise, get_init_latent, from_latent_to_pil, demon_sampling
-from helpers import AestheticScorer
+from reward_models.AestheticScorer import AestheticScorer
 from datetime import datetime
 import matplotlib.pyplot as plt
 
@@ -40,9 +40,13 @@ def aesthetic_generate(
     weighting="spin",
     prompt=None,
     cfg=2,
-    seed=42,
+    seed=None,
     experiment_directory="experiments/aesthetic",
 ):
+    if seed is None:
+        # use unix epoch
+        seed = int(datetime.now().timestamp())
+
     datetime_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_dir = os.path.join(experiment_directory, datetime_str)
     os.makedirs(log_dir, exist_ok=False)
@@ -88,3 +92,6 @@ def aesthetic_generate(
 
 if __name__ == '__main__':
     fire.Fire(aesthetic_generate)
+
+# Example usage:
+# python pipelines/aesthetic_generate.py  --action_num 8 --sample_step 30 --weighting spin --prompt "a cute dog" 
