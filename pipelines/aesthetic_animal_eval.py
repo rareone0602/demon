@@ -11,7 +11,7 @@ import fire
 
 # Local Application/Library Specific Imports
 from api import add_noise, get_init_latent, from_latent_to_pil, demon_sampling
-from helpers import AestheticScorer
+from reward_models.AestheticScorer import AestheticScorer
 
 aesthetic_scorer = AestheticScorer()
 def reward(x):
@@ -52,13 +52,14 @@ def generate_pyplot(log_txt, out_img_file):
     plt.gca().invert_xaxis()  # To display larger sigmas on the left
     plt.grid(True)
     plt.savefig(out_img_file)
+    plt.close()
 
 
 def aesthetic_animal_eval(
     beta=.5,
     tau=0.1,
-    action_num=8,
-    sample_step=30,
+    action_num=16,
+    sample_step=64,
     weighting="spin",
     cfg=2,
     seed=42,

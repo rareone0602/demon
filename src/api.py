@@ -51,7 +51,14 @@ def odeint(x, text_weight_pair, sample_step):
         (get_embedding(prompt), weight) for prompt, weight in text_weight_pair.items()
     ]
     prev_t = 1
-    return odeint_rest(x, prev_t, ts, prompts)
+    for t in ts:
+        dt = t - prev_t
+        f1, _ = get_f_g(prev_t, x, prompts)
+        x_pred = x + f1 * dt
+        f2, _ = get_f_g(t, x_pred, prompts)
+        x = x + 0.5 * (f1 + f2) * dt
+        prev_t = t
+    return x
 
 
 @torch.inference_mode()

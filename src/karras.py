@@ -33,7 +33,7 @@ class KarrasArgs:
 
     def initialize_interpolators(self, s_values):
         """Initialize the interpolators for a, sigma, and s based on s_values."""
-        t_values = np.linspace(1.1 / len(s_values), 1, len(s_values))
+        t_values = np.linspace(1e-5, 1, len(s_values))
         a_values = np.log(s_values)
         sigma_values = np.sqrt(1 - s_values**2) / s_values
 
