@@ -98,7 +98,7 @@ def demon_sampling(x, energy_fn, text_weight_pair, beta, tau, action_num, sample
         candidate_0 = odeint_rest(next_x, t, ts, prompts)
         latent_sde.ode_mode_revert()
 
-        values = torch.tensor([energy_fn(candidate_0[i].unsqueeze(0)) for i in range(action_num)])
+        values = torch.tensor(energy_fn(candidate_0))
         
         if log_dir is not None:
             # Append values.mean().item() and values.std().item() to {log_dir}/sample_hist.txt

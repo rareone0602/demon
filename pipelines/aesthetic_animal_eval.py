@@ -14,12 +14,11 @@ from api import add_noise, get_init_latent, from_latent_to_pil, demon_sampling
 from reward_models.AestheticScorer import AestheticScorer
 
 aesthetic_scorer = AestheticScorer()
-def reward(x):
+def rewards(xs):
     """
     Calculate the aesthetic score of an image.
     """
-    return aesthetic_scorer(from_latent_to_pil(x)).item()
-
+    return [aesthetic_scorer(from_latent_to_pil(x.unsqueeze(0))).item() for x in xs]
 
 def read_animals(file_path):
     """
