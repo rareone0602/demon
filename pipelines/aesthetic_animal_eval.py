@@ -96,7 +96,7 @@ def aesthetic_animal_eval(
         os.mkdir(os.path.join(log_dir, prompt))
         latent = demon_sampling(
             get_init_latent(),
-            reward,
+            rewards,
             prompts,
             beta,
             tau,

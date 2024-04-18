@@ -1,12 +1,15 @@
 # Third-party library imports
 import fire
 import torch
+import json
 from transformers import AutoModel, AutoProcessor
 
 # Local application/library specific imports
 import ImageReward as RM
 from reward_models.AestheticScorer import AestheticScorer
 from generate_abstract import DemonGenerater
+import hpsv2
+
 
 aesthetic_scorer = AestheticScorer().to('cuda')
 
@@ -14,6 +17,10 @@ pickscore_processor = AutoProcessor.from_pretrained("laion/CLIP-ViT-H-14-laion2B
 pickscore_model = AutoModel.from_pretrained("yuvalkirstain/PickScore_v1").eval().to('cuda')
 
 imageReward_model = RM.load("ImageReward-v1.0")
+
+@torch.inference_mode()
+def hpsv2_reward(pil):
+    return hpsv2.score(pil, prompt, hps_version="v2.1")[0] * 40 # We scale the reward by 40 to match the scale of other rewards
 
 # The std of rm_reward and pickscore_reward is about 5 times larger than aesthetic_reward, so we divide them by 5
 @torch.inference_mode()
@@ -42,7 +49,8 @@ def qualitative_generate(
     aesthetic=False,
     imagereward=False,
     pickscore=False,
-    experiment_directory="experiments/qualitative_generate",
+    hpsv2=False,
+    experiment_directory="experiments/qualitative_generate_1_5",
 ):
     global prompt
     prompt = text
@@ -54,11 +62,27 @@ def qualitative_generate(
             total += rm_reward(pil)
         if pickscore:
             total += pickscore_reward(pil)
+        if hpsv2:
+            total += hpsv2_reward(pil)
         return total
     
     class QualitativeGenerater(DemonGenerater):
         def rewards(self, pils):
             return [reward(pil) for pil in pils]
+        
+        def generate(self, prompt):
+            super().generate(prompt, ode=not any([aesthetic, imagereward, pickscore, hpsv2]))
+
+            with open(f'{self.log_dir}/config.json', 'r') as f:
+                config = json.load(f)
+                config['aesthetic'] = aesthetic
+                config['imagereward'] = imagereward
+                config['pickscore'] = pickscore
+                config['hpsv2'] = hpsv2
+                
+            with open(f'{self.log_dir}/config.json', 'w') as f:
+                json.dump(config, f, indent=4)
+
     
     generator = QualitativeGenerater(
         beta=beta,

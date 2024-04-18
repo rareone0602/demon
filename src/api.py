@@ -82,7 +82,7 @@ def sdeint(x, text_weight_pair, beta, sample_step, start_t=1., end_t=0.):
 
 
 @torch.inference_mode()
-def demon_sampling(x, energy_fn, text_weight_pair, beta, tau, action_num, sample_step, weighting="spin", log_dir=None, start_t=1., end_t=0.):
+def demon_sampling(x, energy_fn, text_weight_pair, beta, tau, action_num, sample_step, weighting="spin", log_dir=None, start_t=1., end_t=0., ode_after_sigma=0):
     assert x.shape[0] == 1
     latent_sde.change_noise(beta=beta)
     ts = latent_sde.get_timesteps(sample_step, start_t, end_t)
@@ -92,13 +92,16 @@ def demon_sampling(x, energy_fn, text_weight_pair, beta, tau, action_num, sample
     prev_t = start_t
     while len(ts) > 0:
         t, ts = ts[0], ts[1:]
+        if latent_sde.karras.sigma(t.item()) < ode_after_sigma:
+            return odeint_rest(x, t, ts, prompts)
+            
         zs = torch.randn(action_num, *x.shape[1:]).to(x.device)
         next_x = sde_step(x, t, prev_t, prompts, zs)
         latent_sde.ode_mode()
         candidate_0 = odeint_rest(next_x, t, ts, prompts)
         latent_sde.ode_mode_revert()
 
-        values = torch.tensor(energy_fn(candidate_0))
+        values = torch.tensor(energy_fn(candidate_0), dtype=x.dtype, device=x.device)
         
         if log_dir is not None:
             # Append values.mean().item() and values.std().item() to {log_dir}/sample_hist.txt

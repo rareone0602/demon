@@ -24,7 +24,8 @@ class DemonGenerater(ABC):
                  seed=None,
                  save_pils=False,
                  ylabel="Energy",
-                 experiment_directory="experiments/generate"
+                 experiment_directory="experiments/generate",
+                 ode_after_sigma=0
                  ):
         self.beta = beta
         self.tau = tau
@@ -36,6 +37,7 @@ class DemonGenerater(ABC):
         self.save_pils = save_pils
         self.ylabel = ylabel
         self.experiment_directory = experiment_directory
+        self.ode_after_sigma = ode_after_sigma
 
         if seed is None:
             seed = int(datetime.now().timestamp())
@@ -47,8 +49,9 @@ class DemonGenerater(ABC):
 
         if self.save_pils:
             os.makedirs(f'{self.log_dir}/trajectory', exist_ok=True)
+            nowtime = int(datetime.now().timestamp() * 1e6)
             for i, pil in enumerate(pils):
-                pil.save(f'{self.log_dir}/trajectory/{int(datetime.now().timestamp())}_{i}.png')
+                pil.save(f'{self.log_dir}/trajectory/{nowtime}_{i}.png')
         
         return self.rewards(pils)
 
@@ -77,8 +80,7 @@ class DemonGenerater(ABC):
         plt.savefig(out_img_file)
         plt.close()
 
-    def generate(self, prompt):
-
+    def generate(self, prompt, ode=False):
         datetime_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         self.log_dir = os.path.join(self.experiment_directory, datetime_str)
         os.makedirs(self.log_dir, exist_ok=False)
@@ -97,17 +99,27 @@ class DemonGenerater(ABC):
         with open(f'{self.log_dir}/config.json', 'w') as f:
             json.dump(self.config, f)
         
-        latent = demon_sampling(
-            get_init_latent(),
-            self.rewards_latent,
-            {} if prompt is None else {prompt: self.cfg},
-            self.beta,
-            self.tau,
-            self.action_num,
-            self.sample_step,
-            self.weighting,
-            log_dir=self.log_dir
-        )
+        if ode:
+            latent = odeint(
+                get_init_latent(),
+                {} if prompt is None else {prompt: self.cfg},
+                self.sample_step,
+            )
+        else:
+            latent = demon_sampling(
+                get_init_latent(),
+                self.rewards_latent,
+                {} if prompt is None else {prompt: self.cfg},
+                self.beta,
+                self.tau,
+                self.action_num,
+                self.sample_step,
+                self.weighting,
+                log_dir=self.log_dir,
+                ode_after_sigma=self.ode_after_sigma
+            )
         
-        from_latent_to_pil(latent).save(f'{self.log_dir}/{prompt}.png')
-        self.generate_pyplot(f"{self.log_dir}/expected_energy.txt", f"{self.log_dir}/expected_energy.png")
+        from_latent_to_pil(latent).save(f'{self.log_dir}/out.png')
+    
+        if not ode:
+            self.generate_pyplot(f"{self.log_dir}/expected_energy.txt", f"{self.log_dir}/expected_energy.png")

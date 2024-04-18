@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from diffusers import KDPM2DiscreteScheduler, UNet2DConditionModel
+from diffusers import KDPM2DiscreteScheduler, UNet2DConditionModel, DPMSolverMultistepScheduler
 from scipy.interpolate import InterpolatedUnivariateSpline
 
 def to_float(t):
@@ -95,14 +95,10 @@ class LatentSDEModel(nn.Module):
     """
     Stochastic Differential Equation model
     """
-    def __init__(self, beta='anderson', const=None, path='CompVis/stable-diffusion-v1-4'):
+    def __init__(self, beta='anderson', const=None, path='runwayml/stable-diffusion-v1-5'):
         super().__init__()
         unet = UNet2DConditionModel.from_pretrained(path, subfolder='unet').to('cuda')
         scheduler = KDPM2DiscreteScheduler.from_pretrained(path, subfolder='scheduler')
-        
-        # unet = UNet2DConditionModel.from_pretrained('stablediffusionapi/anything-v5', subfolder='unet').to('cuda')
-        # unet.load_state_dict(torch.load('assets/unet_state_dict.pt'))
-        # scheduler = KDPM2DiscreteScheduler.from_pretrained("stablediffusionapi/anything-v5", subfolder='scheduler')
         
         self.init_noise_sigma = scheduler.init_noise_sigma
         self.scheduler = scheduler

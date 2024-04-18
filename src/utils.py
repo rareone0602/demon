@@ -5,7 +5,7 @@ import torchvision.transforms as transforms
 from tqdm import tqdm, trange
 
 DEVICE = torch.device("cuda")
-FILE_PATH = "CompVis/stable-diffusion-v1-4"
+FILE_PATH = 'runwayml/stable-diffusion-v1-5'
 tokenizer = CLIPTokenizer.from_pretrained(FILE_PATH, subfolder="tokenizer")
 text_encoder = CLIPTextModel.from_pretrained(FILE_PATH, subfolder="text_encoder").to(DEVICE)
 vae = AutoencoderKL.from_pretrained(FILE_PATH, subfolder='vae').to(DEVICE)
@@ -41,7 +41,7 @@ def encode(input_img): # Autoencoder takes [-1, 1] as input
     if len(input_img.shape)<4:
         input_img = input_img.unsqueeze(0)
     with torch.no_grad():
-        latent = vae.encode(input_img * 2 - 1) 
+        latent = vae.encode(input_img * 2 - 1)
     return vae.config.scaling_factor * latent.latent_dist.sample()
 
 def decode(latents):
