@@ -9,25 +9,18 @@ FILE_PATH = 'runwayml/stable-diffusion-v1-5'
 tokenizer = CLIPTokenizer.from_pretrained(FILE_PATH, subfolder="tokenizer")
 text_encoder = CLIPTextModel.from_pretrained(FILE_PATH, subfolder="text_encoder").to(DEVICE)
 vae = AutoencoderKL.from_pretrained(FILE_PATH, subfolder='vae').to(DEVICE)
+pil_convert = transforms.ToPILImage()
 
 def from_pil_to_latent(pil_img):
-    # Convert the PIL Image to a tensor
     pil_img = pil_img.resize((512, 512))
     transformer = transforms.ToTensor()
     img = transformer(pil_img)
-
-    # Add the batch dimension
     img = img.unsqueeze(0).to(vae.device)
-
     return encode(img)
 
 def from_latent_to_pil(latent):
-    # Decode the latent tensor
-    img = decode(latent)
-
-    # Convert the tensor to a PIL Image
-    pil_img = to_pil(img)
-
+    img = decode(latent).squeeze(0)
+    pil_img = pil_convert(img)
     return pil_img
 
 def get_embedding(text):
@@ -52,14 +45,5 @@ def decode(latents):
     image = image.detach()
     return image
 
-def to_pil(scaled_img):
-    # Remove the batch dimension
-    scaled_img = scaled_img.squeeze(0)
-
-    # Convert the tensor to a PIL Image
-    pil_transformer = transforms.ToPILImage()
-    pil_img = pil_transformer(scaled_img)
-
-    return pil_img
 
 
