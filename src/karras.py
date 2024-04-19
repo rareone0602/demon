@@ -22,44 +22,6 @@ def to_float(t):
         raise ValueError(f"Unsupported type {type(t)}")
 
 
-class KarrasArgs:
-    """Handles interpolations related to Karras et al.'s paper.
-    
-    Args:
-        s_values: Scaling values w.r.t to discrete schedule, shape (M,)
-    """
-    def __init__(self, s_values):
-        self.initialize_interpolators(s_values)
-
-    def initialize_interpolators(self, s_values):
-        """Initialize the interpolators for a, sigma, and s based on s_values."""
-        t_values = np.linspace(1e-5, 1, len(s_values))
-        a_values = np.log(s_values)
-        sigma_values = np.sqrt(1 - s_values**2) / s_values
-
-        self.create_interpolator('a', t_values, a_values)
-        self.create_interpolator('sigma', t_values, sigma_values)
-        self.create_interpolator('s', t_values, s_values)
-        self.create_interpolator('sigma_inv', sigma_values, t_values)
-
-    def create_interpolator(self, name, x, y):
-        """Create and store an interpolator and its derivative.
-        
-        Args:
-            name: Name of the interpolator ('a', 'sigma', or 's').
-            x, y: Data points for the interpolation.
-        """
-        setattr(self, f"{name}_interpolator", InterpolatedUnivariateSpline(x, y, k=3))
-        setattr(self, f"{name}_dot_interpolator", getattr(self, f"{name}_interpolator").derivative())
-
-    def get_interpolated_value(self, interpolator, t):
-        """Fetch interpolated value for a given t using the interpolator."""
-        return interpolator(to_float(t)).item()
-
-    def __getattr__(self, name):
-        interpolator = getattr(self, f"{name}_interpolator", None)
-        return lambda t: self.get_interpolated_value(interpolator, t)
-
 class SigmaScoreModel(nn.Module):
     """Computes the Sigma-Score for the unscaled value.
 
@@ -67,29 +29,36 @@ class SigmaScoreModel(nn.Module):
         unet: The U-Net model for computing noise.
         s: Scaling values, shape (M,)
     """
-    def __init__(self, unet, s):
+    def __init__(self, unet, scheduler):
         super().__init__()
         self.unet = unet
-        self.karras = KarrasArgs(s)
-        self.M = len(s)
-
-    def compute_noise_prediction(self, t, x, prompt_embedding):
+        self.scheduler = scheduler
+        self.M = len(scheduler.num_train_timesteps)
+        sigmas = np.array(((1 - scheduler.alphas_cumprod) / scheduler.alphas_cumprod) ** 0.5)
+        self.scheduler.log_sigmas = np.log(sigmas)
+    
+    def sigma_to_t(self, sigma):
+        """Convert sigma to t."""
+        return self.scheduler._sigma_to_t(sigma, self.scheduler.log_sigmas)
+    
+    def compute_noise_prediction(self, sigma, x, prompt_embedding):
         """Compute noise prediction given time, input, and prompt embedding."""
         if prompt_embedding.shape[0] == 1:
             prompt_embedding = prompt_embedding.expand(x.shape[0], -1, -1)
-        return self.unet(x, t * (self.M - 1), encoder_hidden_states=prompt_embedding, return_dict=False)[0]
+        return self.unet(
+            self.scheduler.scale_model_input(x),
+            self.sigma_to_t(sigma) * (self.M - 1), 
+            encoder_hidden_states=prompt_embedding, 
+            return_dict=False
+            )[0]
 
-    def get_noise(self, t, x, prompt_embedding):
+    def get_noise(self, sigma, x, prompt_embedding):
         """Fetch noise prediction for a given time and input."""
-        if torch.is_tensor(t) and t.ndim > 0:
-            x_input = torch.stack([x[i] * self.karras.s(t[i]) for i in range(t.shape[0])])
-        else:
-            x_input = x * self.karras.s(t)
-        noise_prediction = self.compute_noise_prediction(t, x_input, prompt_embedding)
+        noise_prediction = self.compute_noise_prediction(sigma, x, prompt_embedding)
         return noise_prediction
 
-    def forward(self, t, x, prompt_embedding):
-        return -self.get_noise(t, x, prompt_embedding)
+    def forward(self, sigma, x, prompt_embedding):
+        return -self.get_noise(sigma, x, prompt_embedding)
     
 class LatentSDEModel(nn.Module):
     """
@@ -99,53 +68,41 @@ class LatentSDEModel(nn.Module):
         super().__init__()
         unet = UNet2DConditionModel.from_pretrained(path, subfolder='unet').to('cuda')
         scheduler = KDPM2DiscreteScheduler.from_pretrained(path, subfolder='scheduler')
-        
-        self.init_noise_sigma = scheduler.init_noise_sigma
-        self.scheduler = scheduler
-        self.sigma_score = SigmaScoreModel(unet, np.sqrt(scheduler.alphas_cumprod.cpu().numpy()))
-        self.karras = self.sigma_score.karras
+        self.sigma_score = SigmaScoreModel(unet, scheduler)
         self.change_noise(beta=beta, const=const)
     
-        
     def ode_mode(self):
-        self.prev_beta = self.karras.beta
+        self.prev_beta = self.beta
         self.change_noise(const=0)
     
     def ode_mode_revert(self):
-        self.karras.beta = self.prev_beta
+        self.beta = self.prev_beta
     
     def change_noise(self, beta='anderson', const=None):
         if const is not None:
-            self.karras.beta = lambda t: const**2 / self.karras.sigma(t)**2 / 2
+            self.beta = lambda t: const**2 / t**2 / 2
         elif beta == 'anderson':
-            self.karras.beta = lambda t: self.karras.sigma_dot(t) / self.karras.sigma(t)
+            self.beta = lambda t: 1 / t
         elif isinstance(beta, (int, float)):
-            self.karras.beta = lambda t: beta
+            self.beta = lambda t: beta
         else:
             assert callable(beta), "Expected beta to be a lambda function"
-            self.karras.beta = beta
+            self.beta = beta
 
-    def get_timesteps(self, N, start_time=1., end_time=0.):
-        sigma_min, sigma_max = self.karras.sigma(end_time), self.karras.sigma(start_time)
+    def get_timesteps(self, N, sigma_max=1., sigma_min=0.005):
         RHO = 7
         B, A = sigma_max**(1/RHO), (sigma_min**(1/RHO) - sigma_max**(1/RHO)) / N
         # Karras: rho=3 nearly equalizes the truncation error
-        return torch.FloatTensor([self.karras.sigma_inv((A * (i + 1) + B)**RHO) for i in range(N)]).to(self.sigma_score.unet.device)
+        return torch.FloatTensor([(A * (i + 1) + B)**RHO for i in range(N)]).to(self.sigma_score.unet.device)
 
     def prepare_initial_latents(self, batch_size=1, height=512, width=512):
         VAE_SCALE_FACTOR = 8
         NUM_CHANNEL_LATENTS = 4
         shape = (batch_size, NUM_CHANNEL_LATENTS, height // VAE_SCALE_FACTOR, width // VAE_SCALE_FACTOR)
         return torch.randn(shape, device=self.sigma_score.unet.device, dtype=self.sigma_score.unet.dtype) * self.init_noise_sigma
-    
-    def scale(self, latent, t):
-        return latent * self.karras.s(t)
-
-    def unscale(self, scaled_latent, t):
-        return scaled_latent / self.karras.s(t)
         
-    def forward(self, t, latent, text_embedding):
-        f, g = self.f(t, latent, text_embedding), self.g(t, latent, text_embedding)
+    def forward(self, sigma, latent, text_embedding):
+        return self.f(sigma, latent, text_embedding), self.g(sigma, latent, text_embedding)
         return f, g
     
     def f(self, t, y, text_embedding):
