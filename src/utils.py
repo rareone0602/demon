@@ -5,7 +5,7 @@ import torchvision.transforms as transforms
 from tqdm import tqdm, trange
 
 DEVICE = torch.device("cuda")
-FILE_PATH = "CompVis/stable-diffusion-v1-4"
+FILE_PATH = "stabilityai/stable-diffusion-xl-base-1.0"
 tokenizer = CLIPTokenizer.from_pretrained(FILE_PATH, subfolder="tokenizer")
 text_encoder = CLIPTextModel.from_pretrained(FILE_PATH, subfolder="text_encoder").to(DEVICE)
 vae = AutoencoderKL.from_pretrained(FILE_PATH, subfolder='vae').to(DEVICE)

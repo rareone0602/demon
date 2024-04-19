@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from diffusers import KDPM2DiscreteScheduler, UNet2DConditionModel
+from diffusers import KarrasDiffusionSchedulers, UNet2DConditionModel
 from scipy.interpolate import InterpolatedUnivariateSpline
 
 def to_float(t):
@@ -32,15 +32,15 @@ class KarrasArgs:
         self.initialize_interpolators(s_values)
 
     def initialize_interpolators(self, s_values):
-        """Initialize the interpolators for a, sigma, and s based on s_values."""
-        t_values = np.linspace(1e-5, 1, len(s_values))
+        """Initialize the interpolators for a, t, and s based on s_values."""
+        u_values = np.linspace(1e-5, 1, len(s_values))
         a_values = np.log(s_values)
-        sigma_values = np.sqrt(1 - s_values**2) / s_values
+        t_values = np.sqrt(1 - s_values**2) / s_values
 
-        self.create_interpolator('a', t_values, a_values)
-        self.create_interpolator('sigma', t_values, sigma_values)
-        self.create_interpolator('s', t_values, s_values)
-        self.create_interpolator('sigma_inv', sigma_values, t_values)
+        self.create_interpolator('a', u_values, a_values)
+        self.create_interpolator('t', u_values, t_values)
+        self.create_interpolator('s', u_values, s_values)
+        self.create_interpolator('t_inv', t_values, u_values)
 
     def create_interpolator(self, name, x, y):
         """Create and store an interpolator and its derivative.
@@ -95,14 +95,10 @@ class LatentSDEModel(nn.Module):
     """
     Stochastic Differential Equation model
     """
-    def __init__(self, beta='anderson', const=None, path='CompVis/stable-diffusion-v1-4'):
+    def __init__(self, beta='anderson', const=None, path="stabilityai/stable-diffusion-xl-base-1.0"):
         super().__init__()
         unet = UNet2DConditionModel.from_pretrained(path, subfolder='unet').to('cuda')
         scheduler = KDPM2DiscreteScheduler.from_pretrained(path, subfolder='scheduler')
-        
-        # unet = UNet2DConditionModel.from_pretrained('stablediffusionapi/anything-v5', subfolder='unet').to('cuda')
-        # unet.load_state_dict(torch.load('assets/unet_state_dict.pt'))
-        # scheduler = KDPM2DiscreteScheduler.from_pretrained("stablediffusionapi/anything-v5", subfolder='scheduler')
         
         self.init_noise_sigma = scheduler.init_noise_sigma
         self.scheduler = scheduler
