@@ -2,20 +2,17 @@ import torch
 import torch.nn.functional as F
 
 from karras import LatentSDEModel
-from utils import get_embedding, from_latent_to_pil, from_pil_to_latent
+from utils import get_condition, from_latent_to_pil, from_pil_to_latent
 
 latent_sde = LatentSDEModel(beta=0).to('cuda')
-empty_text_embedding = get_embedding("")
-
 
 @torch.inference_mode()
 def get_f_g(t, x, prompts):
-    f_emp, g_emp = latent_sde(t, x, empty_text_embedding)
-    f1 = 0
-    for text_embedding, cfg in prompts:
-        f, _ = latent_sde(t, x, text_embedding)
-        f1 += (f - f_emp) * cfg
-    return f_emp + f1, g_emp
+    conds = prompts['conditions']
+    cfgs = prompts['cfgs']
+    fs, g = latent_sde(t, x.expand(len(cfgs) + 1, -1, -1, -1), conds)
+    f = fs[-1:] + sum(fs[i] * cfg for i, cfg in enumerate(cfgs))
+    return f, g
 
 @torch.inference_mode()
 def sde_step(x, next_t, t, prompts, z):
@@ -45,14 +42,18 @@ def odeint_rest(x, start_t, ts, prompts):
     return x
 
 @torch.inference_mode()
-def odeint(x, text_weight_pair, sample_step):
+def odeint(x, text_cfg_dict, sample_step):
     ts = latent_sde.get_timesteps(sample_step, 1., 0.)
-    prompts = [
-        (get_embedding(prompt), weight) for prompt, weight in text_weight_pair.items()
-    ]
-    prev_t = 1
-    for t in ts:
+    text_cfg_dict['prompts'].append('')
+    # convert text_weight_pair to 
+    prompts = {
+        'conditions': get_condition(text_cfg_dict['prompts']),
+        'cfgs': text_cfg_dict['cfgs'],
+    }
+    prev_t = ts[0]
+    for t in ts[1:]:
         dt = t - prev_t
+        print(x.norm().item())
         f1, _ = get_f_g(prev_t, x, prompts)
         x_pred = x + f1 * dt
         f2, _ = get_f_g(t, x_pred, prompts)
