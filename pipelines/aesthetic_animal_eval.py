@@ -10,15 +10,17 @@ import torch
 import fire
 
 # Local Application/Library Specific Imports
-from api import add_noise, get_init_latent, from_latent_to_pil, demon_sampling
+from api import add_noise, get_init_latent, demon_sampling
+from utils import from_latent_to_pil
 from reward_models.AestheticScorer import AestheticScorer
 
 aesthetic_scorer = AestheticScorer()
+
 def rewards(xs):
     """
     Calculate the aesthetic score of an image.
     """
-    return [aesthetic_scorer(from_latent_to_pil(x.unsqueeze(0))).item() for x in xs]
+    return aesthetic_scorer(from_latent_to_pil(xs)).cpu().numpy().tolist()
 
 def read_animals(file_path):
     """
@@ -27,7 +29,6 @@ def read_animals(file_path):
     with open(file_path, 'r') as f:
         animals = f.read().splitlines()
     return animals
-
 
 def generate_pyplot(log_txt, out_img_file):
     """
@@ -62,6 +63,7 @@ def aesthetic_animal_eval(
     weighting="spin",
     cfg=2,
     seed=42,
+    max_ode_steps=18,
     experiment_directory="experiments/aesthetic_animal_eval",
 ):
     """
@@ -79,6 +81,7 @@ def aesthetic_animal_eval(
         "weighting": weighting,
         "cfg": cfg,
         "seed": seed,
+        "max_ode_steps": max_ode_steps,
         "log_dir": log_dir
     }
     with open(f'{log_dir}/config.json', 'w') as f:
@@ -86,24 +89,27 @@ def aesthetic_animal_eval(
 
     torch.manual_seed(seed)
     
-    
     score_sum = 0
     
     animals = read_animals('assets/common_animals.txt')
     
     for prompt in tqdm(animals):
-        prompts = {prompt: cfg}
+        prompts = {
+            "prompts": [prompt],
+            "cfgs": [cfg]
+        }
         os.mkdir(os.path.join(log_dir, prompt))
         latent = demon_sampling(
             get_init_latent(),
-            reward,
+            rewards,
             prompts,
             beta,
             tau,
             action_num,
             sample_step,
             weighting,
-            log_dir=os.path.join(log_dir, prompt)
+            log_dir=os.path.join(log_dir, prompt),
+            max_ode_steps=max_ode_steps,
         )
         pil = from_latent_to_pil(latent)
         pil.save(os.path.join(log_dir, prompt, f"out.png"))
@@ -121,4 +127,4 @@ def aesthetic_animal_eval(
 if __name__ == '__main__':
     fire.Fire(aesthetic_animal_eval)
 
-# python3 aesthetic_animal_eval.py --beta 0.5 --tau 0.1 --action_num 8 --sample_step 30 --weighting spin
+# python3 pipelines/aesthetic_animal_eval.py --beta 0.5 --tau 0.1 --action_num 8 --sample_step 30 --weighting spin
