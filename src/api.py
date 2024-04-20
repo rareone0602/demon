@@ -11,7 +11,7 @@ def get_f_g(t, x, prompts):
     conds = prompts['conditions']
     cfgs = prompts['cfgs']
     fs, g = latent_sde(t, x.expand(len(cfgs) + 1, -1, -1, -1), conds)
-    f = fs[-1:] + sum(fs[i] * cfg for i, cfg in enumerate(cfgs))
+    f = fs[-1:] + sum((fs[i] - fs[-1]).unsqueeze(0) * cfg for i, cfg in enumerate(cfgs))
     return f, g
 
 @torch.inference_mode()
@@ -43,7 +43,10 @@ def odeint_rest(x, start_t, ts, prompts):
 
 @torch.inference_mode()
 def odeint(x, text_cfg_dict, sample_step):
-    ts = latent_sde.get_timesteps(sample_step, 1., 0.)
+    ts = latent_sde.get_timesteps(
+        T=sample_step, 
+        sigma_max=latent_sde.sigma_score.scheduler.init_noise_sigma
+    )
     text_cfg_dict['prompts'].append('')
     # convert text_weight_pair to 
     prompts = {
@@ -53,7 +56,6 @@ def odeint(x, text_cfg_dict, sample_step):
     prev_t = ts[0]
     for t in ts[1:]:
         dt = t - prev_t
-        print(x.norm().item())
         f1, _ = get_f_g(prev_t, x, prompts)
         x_pred = x + f1 * dt
         f2, _ = get_f_g(t, x_pred, prompts)
