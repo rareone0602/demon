@@ -50,6 +50,7 @@ def generate_pyplot(log_txt, out_img_file):
     plt.xlabel('t')
     plt.ylabel('Aesthetic Score')
     plt.gca().invert_xaxis()  # To display larger sigmas on the left
+    plt.xscale('log')  # Set x-axis to logarithmic scale
     plt.grid(True)
     plt.savefig(out_img_file)
     plt.close()
