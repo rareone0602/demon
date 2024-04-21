@@ -63,7 +63,7 @@ def aesthetic_animal_eval(
     weighting="spin",
     cfg=2,
     seed=42,
-    max_ode_steps=18,
+    max_ode_steps=8,
     experiment_directory="experiments/aesthetic_animal_eval",
 ):
     """

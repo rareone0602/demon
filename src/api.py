@@ -3,8 +3,9 @@ import torch.nn.functional as F
 
 from karras import LatentSDEModel
 from utils import get_condition
+from config import DEVICE, DTYPE
 
-latent_sde = LatentSDEModel(beta=0).to('cuda').to(torch.float16)
+latent_sde = LatentSDEModel(beta=0).to(DEVICE).to(DTYPE)
 
 class OdeModeContextManager:
     def __enter__(self):
@@ -50,7 +51,7 @@ def get_f_g(t, x, prompts):
     N = x.shape[0]
     all_fs = []
     for i in range(0, N, MAX_CHUNK_SIZE):
-        chunk = x[i:max(i+MAX_CHUNK_SIZE, N)]
+        chunk = x[i:min(i+MAX_CHUNK_SIZE, N)]
         fs, g = _get_f_g(t, chunk, prompts) # g is assumed to be the same for all elements in the chunk
         all_fs.append(fs)
     return torch.cat(all_fs), g
@@ -174,7 +175,7 @@ def demon_sampling(x, energy_fn, text_cfg_dict, beta, tau, action_num, sample_st
 
 def add_noise(latent, t):
     z = torch.randn_like(latent)
-    return latent + z * latent_sde.karras.sigma(t)
+    return latent + z * t
 
 def get_init_latent():
     return latent_sde.prepare_initial_latents()

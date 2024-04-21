@@ -27,10 +27,8 @@ def from_pil_to_latent(pil_img):
 
 @torch.inference_mode()
 def from_latent_to_pil(latents):
-
     img = decode(latents)
     ret = [pil_convert(i) for i in img]
-    
     if len(ret) == 1:
         return ret[0]
     else:
