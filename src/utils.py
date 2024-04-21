@@ -74,6 +74,7 @@ def get_condition(text):
         "added_cond_kwargs": {"text_embeds": add_text_embeds, "time_ids": add_time_ids},
     }
 
+@torch.inference_mode()
 def encode(input_img): # Autoencoder takes [-1, 1] as input
     if len(input_img.shape)<4:
         input_img = input_img.unsqueeze(0)
@@ -81,6 +82,7 @@ def encode(input_img): # Autoencoder takes [-1, 1] as input
         latent = vae.encode(input_img * 2 - 1) 
     return (vae.config.scaling_factor * latent.latent_dist.sample()).to(dtype=DTYPE)
 
+@torch.inference_mode()
 def decode(latents):
     latents = (1 / vae.config.scaling_factor) * latents
     MAX_CHUNK_SIZE = 2 # on 3090, we only have ~24GB of memory
@@ -95,6 +97,3 @@ def decode(latents):
     image = torch.cat(all_image)
     image = image.detach().to(latents.dtype)
     return image
-
-
-

@@ -17,7 +17,7 @@ class SigmaScoreModel(nn.Module):
         super().__init__()
         self.unet = unet
         self.scheduler = scheduler
-        self.M = scheduler.num_train_timesteps
+        self.M = scheduler.config.num_train_timesteps
         sigmas = np.array(((1 - scheduler.alphas_cumprod) / scheduler.alphas_cumprod) ** 0.5)
         
         # Note: the scheduler use linear interpolation, but we use cubic spline for smoother interpolation.
@@ -48,9 +48,6 @@ class SigmaScoreModel(nn.Module):
         
     def _compute_noise_prediction(self, sigma, x, conds_kwargs):
         """Compute noise prediction given time, input, and prompt embedding."""
-        if conds_kwargs["encoder_hidden_states"].shape[0] == 1:
-            conds_kwargs["encoder_hidden_states"] = conds_kwargs["encoder_hidden_states"].expand(x.shape[0], -1, -1)
-
         discrete_t = self.sigma_to_t(sigma) # of range(M)
         return self.unet(
             self.sigma_to_scale(sigma) * x,

@@ -179,5 +179,3 @@ def add_noise(latent, t):
 
 def get_init_latent():
     return latent_sde.prepare_initial_latents()
-
-
