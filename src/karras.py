@@ -4,7 +4,7 @@ import numpy as np
 
 from diffusers import KDPM2DiscreteScheduler, UNet2DConditionModel
 from scipy.interpolate import InterpolatedUnivariateSpline
-from config import FILE_PATH, DTYPE, DEVICE
+from config import FILE_PATH, DTYPE, DEVICE, IMAGE_DIMENSION
 
 class SigmaScoreModel(nn.Module):
     """Computes the Sigma-Score for the unscaled value.
@@ -98,7 +98,7 @@ class LatentSDEModel(nn.Module):
         A, B = sigma_min**(1/RHO), sigma_max**(1/RHO)
         return torch.Tensor([(A + ((T - 1 - i) / (T - 1)) * (B - A))**RHO for i in range(T)]).to(dtype=DTYPE, device=DEVICE)
 
-    def prepare_initial_latents(self, batch_size=1, height=1024, width=1024):
+    def prepare_initial_latents(self, batch_size=1, height=IMAGE_DIMENSION, width=IMAGE_DIMENSION):
         VAE_SCALE_FACTOR = 8
         NUM_CHANNEL_LATENTS = 4
         shape = (batch_size, NUM_CHANNEL_LATENTS, height // VAE_SCALE_FACTOR, width // VAE_SCALE_FACTOR)
