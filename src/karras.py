@@ -4,6 +4,7 @@ import numpy as np
 
 from diffusers import KDPM2DiscreteScheduler, UNet2DConditionModel
 from scipy.interpolate import InterpolatedUnivariateSpline
+from config import FILE_PATH, DTYPE, DEVICE, IMAGE_DIMENSION
 
 class SigmaScoreModel(nn.Module):
     """Computes the Sigma-Score for the unscaled value.
@@ -16,7 +17,7 @@ class SigmaScoreModel(nn.Module):
         super().__init__()
         self.unet = unet
         self.scheduler = scheduler
-        self.M = scheduler.num_train_timesteps
+        self.M = scheduler.config.num_train_timesteps
         sigmas = np.array(((1 - scheduler.alphas_cumprod) / scheduler.alphas_cumprod) ** 0.5)
         
         # Note: the scheduler use linear interpolation, but we use cubic spline for smoother interpolation.
@@ -24,7 +25,7 @@ class SigmaScoreModel(nn.Module):
         lower_bound = 0.9858077
         
         # Found by binary search
-        # 2e-10 => 0
+        # 1e-10 => postive but very close to 0
         # sigmas[0] => ?
         # sigmas[-1] => self.M - 1
         
@@ -45,33 +46,31 @@ class SigmaScoreModel(nn.Module):
         return 1 / ((sigma**2 + 1) ** 0.5)
     
         
-    def _compute_noise_prediction(self, sigma, x, prompt_embedding):
+    def _compute_noise_prediction(self, sigma, x, conds_kwargs):
         """Compute noise prediction given time, input, and prompt embedding."""
-        if prompt_embedding.shape[0] == 1:
-            prompt_embedding = prompt_embedding.expand(x.shape[0], -1, -1)
         discrete_t = self.sigma_to_t(sigma) # of range(M)
         return self.unet(
             self.sigma_to_scale(sigma) * x,
-            discrete_t, 
-            encoder_hidden_states=prompt_embedding, 
-            return_dict=False
+            discrete_t,
+            return_dict=False,
+            **conds_kwargs
             )[0]
 
-    def _get_noise(self, sigma, x, prompt_embedding):
+    def _get_noise(self, sigma, x, conds):
         """Fetch noise prediction for a given time and input."""
-        noise_prediction = self._compute_noise_prediction(sigma, x, prompt_embedding)
+        noise_prediction = self._compute_noise_prediction(sigma, x, conds)
         return noise_prediction
 
-    def forward(self, sigma, x, prompt_embedding):
-        return -self._get_noise(sigma, x, prompt_embedding)
+    def forward(self, sigma, x, conds):
+        return -self._get_noise(sigma, x, conds)
     
 class LatentSDEModel(nn.Module):
     """
     Stochastic Differential Equation model
     """
-    def __init__(self, beta='anderson', const=None, path='runwayml/stable-diffusion-v1-5'):
+    def __init__(self, beta='anderson', const=None, path=FILE_PATH):
         super().__init__()
-        unet = UNet2DConditionModel.from_pretrained(path, subfolder='unet').to('cuda')
+        unet = UNet2DConditionModel.from_pretrained(path, subfolder='unet').to(dtype=DTYPE, device=DEVICE)
         scheduler = KDPM2DiscreteScheduler.from_pretrained(path, subfolder='scheduler')
         self.sigma_score = SigmaScoreModel(unet, scheduler)
         self.change_noise(beta=beta, const=const)
@@ -94,23 +93,23 @@ class LatentSDEModel(nn.Module):
             assert callable(beta), "Expected beta to be a lambda function"
             self.beta = beta
 
-    def get_timesteps(self, T, sigma_max=14.6488, sigma_min=0.005):
+    def get_timesteps(self, T, sigma_max=14.6488, sigma_min=1e-4):
         RHO = 7
         A, B = sigma_min**(1/RHO), sigma_max**(1/RHO)
-        return torch.FloatTensor([(A + ((T - 1 - i) / (T - 1)) * (B - A))**RHO for i in range(T)]).to(self.sigma_score.unet.device)
+        return torch.Tensor([(A + ((T - 1 - i) / (T - 1)) * (B - A))**RHO for i in range(T)]).to(dtype=DTYPE, device=DEVICE)
 
-    def prepare_initial_latents(self, batch_size=1, height=512, width=512):
+    def prepare_initial_latents(self, batch_size=1, height=IMAGE_DIMENSION, width=IMAGE_DIMENSION):
         VAE_SCALE_FACTOR = 8
         NUM_CHANNEL_LATENTS = 4
         shape = (batch_size, NUM_CHANNEL_LATENTS, height // VAE_SCALE_FACTOR, width // VAE_SCALE_FACTOR)
-        return torch.randn(shape, device=self.sigma_score.unet.device, dtype=self.sigma_score.unet.dtype) * self.init_noise_sigma
+        return torch.randn(shape, device=DEVICE, dtype=DTYPE) * self.sigma_score.scheduler.init_noise_sigma
         
-    def forward(self, sigma, latent, condition):
-        return self.f(sigma, latent, condition), self.g(sigma)
+    def forward(self, sigma, latent, conds):
+        return self.f(sigma, latent, conds), self.g(sigma)
     
-    def f(self, sigma, x, condition):
-        sigma_score_val =  self.sigma_score(sigma, x, condition)
-        return (self.beta(sigma) * sigma - 1) * sigma_score_val
+    def f(self, sigma, x, conds):
+        sigma_score_val =  self.sigma_score(sigma, x, conds)
+        return (-self.beta(sigma) * sigma - 1) * sigma_score_val
     
     def g(self, sigma):
         return (2 * self.beta(sigma))**0.5 * sigma

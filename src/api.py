@@ -2,11 +2,10 @@ import torch
 import torch.nn.functional as F
 
 from karras import LatentSDEModel
-from utils import get_embedding, from_latent_to_pil, from_pil_to_latent
+from utils import get_condition
+from config import DEVICE, DTYPE
 
-latent_sde = LatentSDEModel(beta=0).to('cuda')
-empty_text_embedding = get_embedding("")
-
+latent_sde = LatentSDEModel(beta=0).to(device=DEVICE, dtype=DTYPE)
 
 @torch.inference_mode()
 def get_f_g(t, x, prompts):
@@ -16,6 +15,18 @@ def get_f_g(t, x, prompts):
         f, _ = latent_sde(t, x, text_embedding)
         f1 += (f - f_emp) * cfg
     return f_emp + f1, g_emp
+
+class OdeModeContextManager:
+    def __enter__(self):
+        latent_sde.ode_mode()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        latent_sde.ode_mode_revert()
+
+def duplicate_condition(conds, n):
+    return {
+        "encoder_hidden_states": conds["encoder_hidden_states"].repeat(n, 1, 1), 
+    }
 
 @torch.inference_mode()
 def sde_step(x, next_t, t, prompts, z):

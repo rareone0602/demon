@@ -76,6 +76,7 @@ class DemonGenerater(ABC):
         plt.xlabel('t')
         plt.ylabel(self.ylabel)
         plt.gca().invert_xaxis()  # To display larger sigmas on the left
+        plt.xscale('log')  # Set x-axis to logarithmic scale
         plt.grid(True)
         plt.savefig(out_img_file)
         plt.close()
