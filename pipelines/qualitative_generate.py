@@ -93,6 +93,7 @@ def qualitative_generate(
         weighting=weighting,
         seed=seed,
         experiment_directory=experiment_directory,
+        ode_after_sigma=0
     )
 
     generator.generate(prompt=text)

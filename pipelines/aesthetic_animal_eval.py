@@ -20,7 +20,12 @@ def rewards(xs):
     """
     Calculate the aesthetic score of an image.
     """
-    return aesthetic_scorer(from_latent_to_pil(xs)).cpu().numpy().tolist()
+    pils = from_latent_to_pil(xs)
+    os.makedirs(f'tmp/trajectory', exist_ok=True)
+    nowtime = int(datetime.now().timestamp() * 1e6)
+    for i, pil in enumerate(pils):
+        pil.save(f'tmp/trajectory/{nowtime}_{i}.png')
+    return aesthetic_scorer(pils).cpu().numpy().tolist()
 
 def read_animals(file_path):
     """
@@ -63,7 +68,8 @@ def aesthetic_animal_eval(
     weighting="spin",
     cfg=2,
     seed=42,
-    max_ode_steps=12,
+    ode_after=0,
+    max_ode_steps=18,
     experiment_directory="experiments/aesthetic_animal_eval_1_4",
 ):
     """
@@ -81,6 +87,7 @@ def aesthetic_animal_eval(
         "weighting": weighting,
         "cfg": cfg,
         "seed": seed,
+        "ode_after": ode_after,
         "max_ode_steps": max_ode_steps,
         "log_dir": log_dir
     }
@@ -107,7 +114,8 @@ def aesthetic_animal_eval(
             action_num,
             sample_step,
             weighting,
-            log_dir=os.path.join(log_dir, prompt)
+            log_dir=os.path.join(log_dir, prompt),
+            ode_after=ode_after,
             max_ode_steps=max_ode_steps,
         )
         pil = from_latent_to_pil(latent)
@@ -115,7 +123,7 @@ def aesthetic_animal_eval(
         generate_pyplot(os.path.join(log_dir, prompt, 'expected_energy.txt'), 
                         os.path.join(log_dir, prompt, "expected_energy.png"))
         
-        scores.appen(aesthetic_scorer(pil).item())
+        scores.append(aesthetic_scorer(pil).item())
     
     scores = np.array(scores)
     config["score"] = np.mean(scores).item()

@@ -25,7 +25,8 @@ class DemonGenerater(ABC):
                  save_pils=False,
                  ylabel="Energy",
                  experiment_directory="experiments/generate",
-                 ode_after_sigma=0
+                 max_ode_steps=25,
+                 ode_after=0
                  ):
         self.beta = beta
         self.tau = tau
@@ -37,7 +38,8 @@ class DemonGenerater(ABC):
         self.save_pils = save_pils
         self.ylabel = ylabel
         self.experiment_directory = experiment_directory
-        self.ode_after_sigma = ode_after_sigma
+        self.max_ode_steps = max_ode_steps
+        self.ode_after = ode_after
 
         if seed is None:
             seed = int(datetime.now().timestamp())
@@ -95,6 +97,8 @@ class DemonGenerater(ABC):
             "prompt": prompt,
             "seed": self.seed,
             "log_dir": self.log_dir,
+            "max_ode_steps": self.max_ode_steps,
+            "ode_after": self.ode_after,
         }
 
         with open(f'{self.log_dir}/config.json', 'w') as f:
@@ -116,8 +120,9 @@ class DemonGenerater(ABC):
                 self.action_num,
                 self.sample_step,
                 self.weighting,
+                max_ode_steps=self.max_ode_steps,
+                ode_after=self.ode_after,
                 log_dir=self.log_dir,
-                ode_after_sigma=self.ode_after_sigma
             )
         
         from_latent_to_pil(latent).save(f'{self.log_dir}/out.png')

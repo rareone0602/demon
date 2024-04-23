@@ -7,12 +7,21 @@ from config import DEVICE, DTYPE
 
 latent_sde = LatentSDEModel(beta=0).to(DEVICE).to(DTYPE)
 
+
+breakpoint()
+
 class OdeModeContextManager:
     def __enter__(self):
         latent_sde.ode_mode()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         latent_sde.ode_mode_revert()
+    
+    def __call__(self, func):
+        def wrapper(*args, **kwargs):
+            with self:
+                return func(*args, **kwargs)
+        return wrapper
 
 def duplicate_condition(conds, n):
     return {
@@ -41,7 +50,7 @@ def _get_f_g(t, x, prompts):
 
 @torch.inference_mode()
 def get_f_g(t, x, prompts):
-    MAX_CHUNK_SIZE = 16
+    MAX_CHUNK_SIZE = 32
     N = x.shape[0]
     all_fs = []
     for i in range(0, N, MAX_CHUNK_SIZE):
@@ -62,6 +71,7 @@ def sde_step(x, t, prev_t, prompts, z):
     x = x + 0.5 * (f1 + f2) * dt + 0.5 * (g1 + g2) * rand_term
     return x
 
+
 @torch.inference_mode()
 def ode_step(x, t, prev_t, prompts):
     dt = t - prev_t
@@ -71,19 +81,21 @@ def ode_step(x, t, prev_t, prompts):
     x = x + 0.5 * (f1 + f2) * dt
     return x
 
+@OdeModeContextManager()
 @torch.inference_mode()
 def odeint_rest(x, start_t, ts, prompts, max_ode_steps=15):
     if len(ts) > max_ode_steps:
-        ts = latent_sde.get_timesteps(max_ode_steps, sigma_max=ts[0], sigma_min=ts[-1])
+        ts = latent_sde.get_karras_timesteps(max_ode_steps, sigma_max=ts[0], sigma_min=ts[-1])
     prev_t = start_t
     for t in ts:
         x = ode_step(x, t, prev_t, prompts)
         prev_t = t
     return x
 
+@OdeModeContextManager()
 @torch.inference_mode()
 def odeint(x, text_cfg_dict, sample_step, start_t=14.648, end_t=1e-3):
-    ts = latent_sde.get_timesteps(
+    ts = latent_sde.get_karras_timesteps(
         T=sample_step,
         sigma_max=start_t,
         sigma_min=end_t
@@ -103,7 +115,7 @@ def odeint(x, text_cfg_dict, sample_step, start_t=14.648, end_t=1e-3):
 @torch.inference_mode()
 def sdeint(x, text_cfg_dict, beta, sample_step, start_t=14.648, end_t=1e-3):
     latent_sde.change_noise(beta=beta)
-    ts = latent_sde.get_timesteps(
+    ts = latent_sde.get_karras_timesteps(
         T=sample_step,
         sigma_max=start_t,
         sigma_min=end_t
@@ -120,10 +132,23 @@ def sdeint(x, text_cfg_dict, beta, sample_step, start_t=14.648, end_t=1e-3):
     return x
 
 @torch.inference_mode()
-def demon_sampling(x, energy_fn, text_cfg_dict, beta, tau, action_num, sample_step, weighting="spin", log_dir=None, start_t=14.648, end_t=1e-4, max_ode_steps=8, ode_after=0):
+def demon_sampling(x, 
+                   energy_fn, 
+                   text_cfg_dict, 
+                   beta, 
+                   tau, 
+                   action_num, 
+                   sample_step, 
+                   weighting="spin", 
+                   start_t=14.648, 
+                   end_t=1e-4, 
+                   timesteps="log", 
+                   max_ode_steps=25, 
+                   ode_after=0, 
+                   log_dir=None):
     assert x.shape[0] == 1
     latent_sde.change_noise(beta=beta)
-    ts = latent_sde.get_timesteps(
+    ts = latent_sde.get_karras_timesteps(
         T=sample_step,
         sigma_max=start_t,
         sigma_min=end_t
@@ -135,15 +160,14 @@ def demon_sampling(x, energy_fn, text_cfg_dict, beta, tau, action_num, sample_st
     }
     prev_t, ts = ts[0], ts[1:]
     while len(ts) > 0:
-        t, ts = ts[0], ts[1:]
-        if t < ode_after:
-            x = odeint_rest(x, t, ts, prompts)
+        if prev_t < ode_after:
+            x = odeint_rest(x, prev_t, ts, prompts)
             break
+        t, ts = ts[0], ts[1:]
         zs = torch.randn(action_num, *x.shape[1:], device=x.device, dtype=x.dtype)
         next_xs = sde_step(x, t, prev_t, prompts, zs)    
         
-        with OdeModeContextManager():
-            candidates_0 = odeint_rest(next_xs, t, ts, prompts, max_ode_steps=max_ode_steps)
+        candidates_0 = odeint_rest(next_xs, t, ts, prompts, max_ode_steps=max_ode_steps)
         
         values = torch.tensor(energy_fn(candidates_0)).to(device=x.device, dtype=x.dtype)
         
