@@ -39,18 +39,21 @@ def aesthetic_reward(pil):
 
 def qualitative_generate(
     beta=.5,
-    tau=0.05,
+    tau='adaptive',
     action_num=16,
-    sample_step=64,
-    cfg=2,
     weighting="spin",
+    sample_step=64,
+    timesteps="karras",
+    max_ode_steps=20,
+    ode_after=0.11,
     text=None,
+    cfg=2,
     seed=None,
     aesthetic=False,
     imagereward=False,
     pickscore=False,
     hpsv2=False,
-    experiment_directory="experiments/qualitative_generate",
+    experiment_directory="experiments/qualitative_generate_1_5",
 ):
     global prompt
     prompt = text
@@ -93,6 +96,7 @@ def qualitative_generate(
         weighting=weighting,
         seed=seed,
         experiment_directory=experiment_directory,
+        ode_after_sigma=0
     )
 
     generator.generate(prompt=text)
