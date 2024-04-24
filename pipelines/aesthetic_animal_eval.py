@@ -62,14 +62,15 @@ def generate_pyplot(log_txt, out_img_file):
 
 def aesthetic_animal_eval(
     beta=.5,
-    tau=0.1,
+    tau='adaptive',
     action_num=16,
-    sample_step=64,
     weighting="spin",
+    sample_step=64,
+    timesteps="karras",
+    max_ode_steps=20,
+    ode_after=0.11,
     cfg=2,
     seed=42,
-    ode_after=0,
-    max_ode_steps=18,
     experiment_directory="experiments/aesthetic_animal_eval_1_4",
 ):
     """
@@ -83,20 +84,22 @@ def aesthetic_animal_eval(
         "beta": beta,
         "tau": tau,
         "action_num": action_num,
-        "sample_step": sample_step,
         "weighting": weighting,
+        "sample_step": sample_step,
+        "timesteps": timesteps,
+        "max_ode_steps": max_ode_steps,
+        "ode_after": ode_after,
         "cfg": cfg,
         "seed": seed,
-        "ode_after": ode_after,
-        "max_ode_steps": max_ode_steps,
         "log_dir": log_dir
     }
+
     with open(f'{log_dir}/config.json', 'w') as f:
-        json.dump(config, f)
+        json.dump(config, f, indent=4)
 
     torch.manual_seed(seed)
     
-    animals = read_animals('assets/common_animals.txt')
+    animals = read_animals('assets/very_simple_animal.txt')
     
     scores = []
     for prompt in tqdm(animals):
@@ -112,11 +115,12 @@ def aesthetic_animal_eval(
             beta,
             tau,
             action_num,
-            sample_step,
             weighting,
-            log_dir=os.path.join(log_dir, prompt),
-            ode_after=ode_after,
+            sample_step,
+            timesteps,
             max_ode_steps=max_ode_steps,
+            ode_after=ode_after,
+            log_dir=os.path.join(log_dir, prompt),
         )
         pil = from_latent_to_pil(latent)
         pil.save(os.path.join(log_dir, prompt, f"out.png"))

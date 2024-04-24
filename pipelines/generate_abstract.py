@@ -6,6 +6,7 @@ from datetime import datetime
 # Third-party library imports
 import torch
 import matplotlib.pyplot as plt
+import numpy as np
 
 # Local application/library specific imports
 from api import demon_sampling, get_init_latent, from_latent_to_pil, odeint
@@ -14,40 +15,45 @@ from abc import ABC, abstractmethod
 
 class DemonGenerater(ABC):
 
-    def __init__(self, 
-                 beta=0.5, 
-                 tau=0.05,
-                 action_num=16, 
-                 sample_step=64,
-                 cfg=2,
-                 weighting="spin",
-                 seed=None,
-                 save_pils=False,
-                 ylabel="Energy",
-                 experiment_directory="experiments/generate",
-                 max_ode_steps=25,
-                 ode_after=0
-                 ):
+    def __init__(
+            self, 
+            beta=.5, 
+            tau='adaptive',
+            action_num=16, 
+            weighting="spin",
+            sample_step=64,
+            timesteps="karras",
+            max_ode_steps=20,
+            ode_after=0.11,
+            cfg=2,
+            seed=None,
+            save_pils=False,
+            ylabel="Energy",
+            experiment_directory="experiments/generate",
+        ):
         self.beta = beta
         self.tau = tau
         self.action_num = action_num
-        self.sample_step = sample_step
-        self.cfg = cfg
         self.weighting = weighting
-        self.seed = seed
+        self.sample_step = sample_step
+        self.timesteps = timesteps
+        self.max_ode_steps = max_ode_steps
+        self.ode_after = ode_after
+        self.cfg = cfg
         self.save_pils = save_pils
         self.ylabel = ylabel
         self.experiment_directory = experiment_directory
-        self.max_ode_steps = max_ode_steps
-        self.ode_after = ode_after
-
-        if seed is None:
-            seed = int(datetime.now().timestamp())
         
-        torch.manual_seed(seed)
+        if seed is None:
+            self.seed = int(datetime.now().timestamp())
+        else:
+            self.seed = seed
+
+        np.random.seed(self.seed)
+        torch.manual_seed(self.seed)
 
     def rewards_latent(self, latents):
-        pils = [from_latent_to_pil(latent.unsqueeze(0)) for latent in latents]
+        pils = from_latent_to_pil(latents)
 
         if self.save_pils:
             os.makedirs(f'{self.log_dir}/trajectory', exist_ok=True)
@@ -92,29 +98,36 @@ class DemonGenerater(ABC):
             "beta": self.beta,
             "tau": self.tau,
             "action_num": self.action_num,
-            "sample_step": self.sample_step,
             "weighting": self.weighting,
+            "sample_step": self.sample_step,
+            "timesteps": self.timesteps,
+            "max_ode_steps": self.max_ode_steps,
+            "ode_after": self.ode_after,            
             "prompt": prompt,
+            "cfg": self.cfg,
             "seed": self.seed,
             "log_dir": self.log_dir,
-            "max_ode_steps": self.max_ode_steps,
-            "ode_after": self.ode_after,
         }
 
         with open(f'{self.log_dir}/config.json', 'w') as f:
-            json.dump(self.config, f)
+            json.dump(self.config, f, indent=4)
         
+        prompts = {
+            "prompts": [prompt if prompt is not None else ""],
+            "cfgs": [self.cfg]
+        }
+
         if ode:
             latent = odeint(
                 get_init_latent(),
-                {} if prompt is None else {prompt: self.cfg},
+                prompts,
                 self.sample_step,
             )
         else:
             latent = demon_sampling(
                 get_init_latent(),
                 self.rewards_latent,
-                {} if prompt is None else {prompt: self.cfg},
+                prompts,
                 self.beta,
                 self.tau,
                 self.action_num,
