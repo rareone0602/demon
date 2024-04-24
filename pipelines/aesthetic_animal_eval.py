@@ -8,6 +8,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torch
 import fire
+import numpy as np
 
 # Local Application/Library Specific Imports
 from api import add_noise, get_init_latent, demon_sampling
@@ -15,12 +16,16 @@ from utils import from_latent_to_pil
 from reward_models.AestheticScorer import AestheticScorer
 
 aesthetic_scorer = AestheticScorer()
-
 def rewards(xs):
     """
     Calculate the aesthetic score of an image.
     """
-    return aesthetic_scorer(from_latent_to_pil(xs)).cpu().numpy().tolist()
+    pils = from_latent_to_pil(xs)
+    os.makedirs(f'tmp/trajectory', exist_ok=True)
+    nowtime = int(datetime.now().timestamp() * 1e6)
+    for i, pil in enumerate(pils):
+        pil.save(f'tmp/trajectory/{nowtime}_{i}.png')
+    return aesthetic_scorer(pils).cpu().numpy().tolist()
 
 def read_animals(file_path):
     """
@@ -55,17 +60,18 @@ def generate_pyplot(log_txt, out_img_file):
     plt.savefig(out_img_file)
     plt.close()
 
-
 def aesthetic_animal_eval(
     beta=.5,
-    tau=0.1,
+    tau='adaptive',
     action_num=16,
-    sample_step=64,
     weighting="spin",
+    sample_step=64,
+    timesteps="karras",
+    max_ode_steps=20,
+    ode_after=0.11,
     cfg=2,
     seed=42,
-    max_ode_steps=8,
-    experiment_directory="experiments/aesthetic_animal_eval",
+    experiment_directory="experiments/aesthetic_animal_eval_1_4",
 ):
     """
     Evaluate the aesthetic score of animals using latent space optimization.
@@ -78,22 +84,24 @@ def aesthetic_animal_eval(
         "beta": beta,
         "tau": tau,
         "action_num": action_num,
-        "sample_step": sample_step,
         "weighting": weighting,
+        "sample_step": sample_step,
+        "timesteps": timesteps,
+        "max_ode_steps": max_ode_steps,
+        "ode_after": ode_after,
         "cfg": cfg,
         "seed": seed,
-        "max_ode_steps": max_ode_steps,
         "log_dir": log_dir
     }
+
     with open(f'{log_dir}/config.json', 'w') as f:
-        json.dump(config, f)
+        json.dump(config, f, indent=4)
 
     torch.manual_seed(seed)
     
-    score_sum = 0
+    animals = read_animals('assets/very_simple_animal.txt')
     
-    animals = read_animals('assets/common_animals.txt')
-    
+    scores = []
     for prompt in tqdm(animals):
         prompts = {
             "prompts": [prompt],
@@ -107,19 +115,23 @@ def aesthetic_animal_eval(
             beta,
             tau,
             action_num,
-            sample_step,
             weighting,
-            log_dir=os.path.join(log_dir, prompt),
+            sample_step,
+            timesteps,
             max_ode_steps=max_ode_steps,
+            ode_after=ode_after,
+            log_dir=os.path.join(log_dir, prompt),
         )
         pil = from_latent_to_pil(latent)
         pil.save(os.path.join(log_dir, prompt, f"out.png"))
         generate_pyplot(os.path.join(log_dir, prompt, 'expected_energy.txt'), 
                         os.path.join(log_dir, prompt, "expected_energy.png"))
         
-        score_sum += aesthetic_scorer(pil).item()
+        scores.append(aesthetic_scorer(pil).item())
     
-    config["score"] = score_sum / len(animals)
+    scores = np.array(scores)
+    config["score"] = np.mean(scores).item()
+    config["score_std"] = np.std(scores).item()
 
     with open(f'{log_dir}/config.json', 'w') as f:
         json.dump(config, f)
