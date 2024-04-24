@@ -26,8 +26,11 @@ class OdeModeContextManager:
 def duplicate_condition(conds, n):
     return {
         "encoder_hidden_states": conds["encoder_hidden_states"].repeat(n, 1, 1), 
+        "added_cond_kwargs": {
+            "text_embeds": conds["added_cond_kwargs"]["text_embeds"].repeat(n, 1), 
+            "time_ids": conds["added_cond_kwargs"]["time_ids"].repeat(n, 1)
+        },
     }
-
 
 def _get_f_g(t, x, prompts):
     conds = prompts['conditions']
@@ -149,10 +152,10 @@ def demon_sampling(x,
                    weighting, 
                    sample_step,
                    timesteps,
-                   max_ode_steps=20, 
+                   max_ode_steps=20,
                    ode_after=0,
-                   start_t=14.648, 
-                   end_t=2e-3, 
+                   start_t=14.648,
+                   end_t=2e-3,
                    log_dir=None):
     assert x.shape[0] == 1
     latent_sde.change_noise(beta=beta)

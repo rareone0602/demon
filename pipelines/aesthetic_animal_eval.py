@@ -16,15 +16,18 @@ from utils import from_latent_to_pil
 from reward_models.AestheticScorer import AestheticScorer
 
 aesthetic_scorer = AestheticScorer()
+
 def rewards(xs):
     """
     Calculate the aesthetic score of an image.
     """
     pils = from_latent_to_pil(xs)
+    """
     os.makedirs(f'tmp/trajectory', exist_ok=True)
     nowtime = int(datetime.now().timestamp() * 1e6)
     for i, pil in enumerate(pils):
         pil.save(f'tmp/trajectory/{nowtime}_{i}.png')
+    """
     return aesthetic_scorer(pils).cpu().numpy().tolist()
 
 def read_animals(file_path):
@@ -71,7 +74,7 @@ def aesthetic_animal_eval(
     ode_after=0.11,
     cfg=2,
     seed=42,
-    experiment_directory="experiments/aesthetic_animal_eval_1_4",
+    experiment_directory="experiments/aesthetic_animal_eval",
 ):
     """
     Evaluate the aesthetic score of animals using latent space optimization.
