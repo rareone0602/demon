@@ -93,7 +93,10 @@ class LatentSDEModel(nn.Module):
             assert callable(beta), "Expected beta to be a lambda function"
             self.beta = beta
 
-    def get_timesteps(self, T, sigma_max=14.6488, sigma_min=1e-4):
+    def get_linear_timesteps(self, T, sigma_max=14.6488, sigma_min=2e-3):
+        return torch.linspace(sigma_max, sigma_min, T).to(dtype=DTYPE, device=DEVICE)
+
+    def get_karras_timesteps(self, T, sigma_max=14.6488, sigma_min=2e-3):
         RHO = 7
         A, B = sigma_min**(1/RHO), sigma_max**(1/RHO)
         return torch.Tensor([(A + ((T - 1 - i) / (T - 1)) * (B - A))**RHO for i in range(T)]).to(dtype=DTYPE, device=DEVICE)

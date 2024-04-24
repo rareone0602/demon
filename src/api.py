@@ -1,11 +1,14 @@
 import torch
 import torch.nn.functional as F
+import numpy as np
 
 from karras import LatentSDEModel
 from utils import get_condition
 from config import DEVICE, DTYPE
+from tqdm import tqdm
 
 latent_sde = LatentSDEModel(beta=0).to(DEVICE).to(DTYPE)
+
 
 class OdeModeContextManager:
     def __enter__(self):
@@ -13,17 +16,19 @@ class OdeModeContextManager:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         latent_sde.ode_mode_revert()
+    
+    def __call__(self, func):
+        def wrapper(*args, **kwargs):
+            with self:
+                return func(*args, **kwargs)
+        return wrapper
 
 def duplicate_condition(conds, n):
     return {
         "encoder_hidden_states": conds["encoder_hidden_states"].repeat(n, 1, 1), 
-        "added_cond_kwargs": {
-            "text_embeds": conds["added_cond_kwargs"]["text_embeds"].repeat(n, 1), 
-            "time_ids": conds["added_cond_kwargs"]["time_ids"].repeat(n, 1)
-        },
     }
 
-@torch.inference_mode()
+
 def _get_f_g(t, x, prompts):
     conds = prompts['conditions']
     cfgs = prompts['cfgs']
@@ -41,19 +46,19 @@ def _get_f_g(t, x, prompts):
         f = fs[(j + 1) * C - 1] + \
             sum((fs[j * C + i] - fs[(j + 1) * C - 1]) * cfg for i, cfg in enumerate(cfgs))
         all_f.append(f)
+    
     return torch.stack(all_f), g
 
+@torch.inference_mode()
 def get_f_g(t, x, prompts):
-    MAX_CHUNK_SIZE = 16 # on 3090, we only have ~24GB of memory
-    # 4 => 13828 MiB
-    # 8 => 20414 MiB
-
+    MAX_CHUNK_SIZE = 32
     N = x.shape[0]
     all_fs = []
     for i in range(0, N, MAX_CHUNK_SIZE):
         chunk = x[i:min(i+MAX_CHUNK_SIZE, N)]
         fs, g = _get_f_g(t, chunk, prompts) # g is assumed to be the same for all elements in the chunk
         all_fs.append(fs)
+    
     return torch.cat(all_fs), g
 
 @torch.inference_mode()
@@ -77,19 +82,26 @@ def ode_step(x, t, prev_t, prompts):
     x = x + 0.5 * (f1 + f2) * dt
     return x
 
+def best_stepnum(t, sigma_max=14.6488, sigma_min=2e-3, max_ode_step=18, RHO=7):
+    A, B, C = sigma_min**(1/RHO), sigma_max**(1/RHO), t**(1/RHO)
+    ratio = (C - A) / (B - A)
+    return max(np.ceil(max_ode_step * ratio).astype(int), 0)
+    
+@OdeModeContextManager()
 @torch.inference_mode()
-def odeint_rest(x, start_t, ts, prompts, max_ode_steps=15):
-    if len(ts) > max_ode_steps:
-        ts = latent_sde.get_timesteps(max_ode_steps, sigma_max=ts[0], sigma_min=ts[-1])
-    prev_t = start_t
+def odeint_rest(x, start_t, ts, prompts, max_ode_steps=18):
+    steps = best_stepnum(start_t, max_ode_step=max_ode_steps) + 2
+    ts = latent_sde.get_karras_timesteps(steps, start_t, sigma_min=ts[-1])
+    prev_t, ts = ts[0], ts[1:]
     for t in ts:
         x = ode_step(x, t, prev_t, prompts)
         prev_t = t
     return x
 
+@OdeModeContextManager()
 @torch.inference_mode()
-def odeint(x, text_cfg_dict, sample_step, start_t=14.648, end_t=1e-3):
-    ts = latent_sde.get_timesteps(
+def odeint(x, text_cfg_dict, sample_step, start_t=14.648, end_t=2e-3):
+    ts = latent_sde.get_karras_timesteps(
         T=sample_step,
         sigma_max=start_t,
         sigma_min=end_t
@@ -100,16 +112,17 @@ def odeint(x, text_cfg_dict, sample_step, start_t=14.648, end_t=1e-3):
         'cfgs': text_cfg_dict['cfgs'],
     }
     prev_t = ts[0]
-    for t in ts[1:]:
+    progress_bar = tqdm(ts[1:], leave=False, position=1) if use_tqdm else ts
+    for t in progress_bar:
         x = ode_step(x, t, prev_t, prompts)
         prev_t = t
     return x
 
 
 @torch.inference_mode()
-def sdeint(x, text_cfg_dict, beta, sample_step, start_t=14.648, end_t=1e-3):
+def sdeint(x, text_cfg_dict, beta, sample_step, start_t=14.648, end_t=2e-3):
     latent_sde.change_noise(beta=beta)
-    ts = latent_sde.get_timesteps(
+    ts = latent_sde.get_karras_timesteps(
         T=sample_step,
         sigma_max=start_t,
         sigma_min=end_t
@@ -125,15 +138,40 @@ def sdeint(x, text_cfg_dict, beta, sample_step, start_t=14.648, end_t=1e-3):
         prev_t = t
     return x
 
+
 @torch.inference_mode()
-def demon_sampling(x, energy_fn, text_cfg_dict, beta, tau, action_num, sample_step, weighting="spin", log_dir=None, start_t=14.648, end_t=1e-4, max_ode_steps=8, ode_after=0):
+def demon_sampling(x, 
+                   energy_fn, 
+                   text_cfg_dict, 
+                   beta, 
+                   tau, 
+                   action_num, 
+                   weighting, 
+                   sample_step,
+                   timesteps,
+                   max_ode_steps=20, 
+                   ode_after=0,
+                   start_t=14.648, 
+                   end_t=2e-3, 
+                   log_dir=None):
     assert x.shape[0] == 1
     latent_sde.change_noise(beta=beta)
-    ts = latent_sde.get_timesteps(
-        T=sample_step,
-        sigma_max=start_t,
-        sigma_min=end_t
-    )
+    
+    if timesteps == "karras":
+        ts = latent_sde.get_karras_timesteps(
+            T=sample_step,
+            sigma_max=start_t,
+            sigma_min=end_t
+        )
+    elif timesteps == "linear":
+        ts = latent_sde.get_linear_timesteps(
+            T=sample_step,
+            sigma_max=start_t,
+            sigma_min=end_t
+        )
+    else:
+        raise ValueError(f"Unknown timesteps: {timesteps}")
+    
     text_cfg_dict['prompts'].append('')
     prompts = {
         'conditions': get_condition(text_cfg_dict['prompts']),
@@ -141,15 +179,15 @@ def demon_sampling(x, energy_fn, text_cfg_dict, beta, tau, action_num, sample_st
     }
     prev_t, ts = ts[0], ts[1:]
     while len(ts) > 0:
-        t, ts = ts[0], ts[1:]
-        if t < ode_after:
-            x = odeint_rest(x, t, ts, prompts)
+        if prev_t < ode_after:
+            x = odeint_rest(x, prev_t, ts, prompts, max_ode_steps=max_ode_steps)
             break
         zs = torch.randn(action_num, *x.shape[1:], device=x.device, dtype=x.dtype)
+        
+        t, ts = ts[0], ts[1:]
         next_xs = sde_step(x, t, prev_t, prompts, zs)    
         
-        with OdeModeContextManager():
-            candidates_0 = odeint_rest(next_xs, t, ts, prompts, max_ode_steps=max_ode_steps)
+        candidates_0 = odeint_rest(next_xs, t, ts, prompts, max_ode_steps=max_ode_steps)
         
         values = torch.tensor(energy_fn(candidates_0)).to(device=x.device, dtype=x.dtype)
         
@@ -160,6 +198,9 @@ def demon_sampling(x, energy_fn, text_cfg_dict, beta, tau, action_num, sample_st
 
         values = values - values.mean()
         
+        if tau == 'adaptive':
+            tau = values.std().item()
+
         if weighting == "spin":
             weights = torch.tanh(values / tau)
         elif weighting == "boltzmann":
