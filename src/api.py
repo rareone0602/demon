@@ -53,7 +53,8 @@ def _get_f_g(t, x, prompts):
 
 @torch.inference_mode()
 def get_f_g(t, x, prompts):
-    MAX_CHUNK_SIZE = 32
+    MAX_CHUNK_SIZE = 8
+    # 16 if you only need aesthetic score on 3090
     N = x.shape[0]
     all_fs = []
     for i in range(0, N, MAX_CHUNK_SIZE):

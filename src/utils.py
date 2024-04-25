@@ -85,7 +85,7 @@ def encode(input_img): # Autoencoder takes [-1, 1] as input
 @torch.inference_mode()
 def decode(latents):
     latents = (1 / vae.config.scaling_factor) * latents
-    MAX_CHUNK_SIZE = 2 # on 3090, we only have ~24GB of memory
+    MAX_CHUNK_SIZE = 1
     
     all_image = []
     for i in range(0, len(latents), MAX_CHUNK_SIZE):
