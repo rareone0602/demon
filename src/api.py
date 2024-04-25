@@ -26,8 +26,11 @@ class OdeModeContextManager:
 def duplicate_condition(conds, n):
     return {
         "encoder_hidden_states": conds["encoder_hidden_states"].repeat(n, 1, 1), 
+        "added_cond_kwargs": {
+            "text_embeds": conds["added_cond_kwargs"]["text_embeds"].repeat(n, 1), 
+            "time_ids": conds["added_cond_kwargs"]["time_ids"].repeat(n, 1)
+        },
     }
-
 
 def _get_f_g(t, x, prompts):
     conds = prompts['conditions']
@@ -90,7 +93,7 @@ def best_stepnum(t, sigma_max=14.6488, sigma_min=2e-3, max_ode_step=18, RHO=7):
 @OdeModeContextManager()
 @torch.inference_mode()
 def odeint_rest(x, start_t, ts, prompts, max_ode_steps=18):
-    steps = best_stepnum(start_t, max_ode_step=max_ode_steps) + 2
+    steps = best_stepnum(start_t.item(), max_ode_step=max_ode_steps) + 2
     ts = latent_sde.get_karras_timesteps(steps, start_t, sigma_min=ts[-1])
     prev_t, ts = ts[0], ts[1:]
     for t in ts:
@@ -149,10 +152,10 @@ def demon_sampling(x,
                    weighting, 
                    sample_step,
                    timesteps,
-                   max_ode_steps=20, 
+                   max_ode_steps=20,
                    ode_after=0,
-                   start_t=14.648, 
-                   end_t=2e-3, 
+                   start_t=14.648,
+                   end_t=2e-3,
                    log_dir=None):
     assert x.shape[0] == 1
     latent_sde.change_noise(beta=beta)
