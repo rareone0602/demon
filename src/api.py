@@ -5,7 +5,6 @@ import numpy as np
 from karras import LatentSDEModel
 from utils import get_condition
 from config import DEVICE, DTYPE
-from tqdm import tqdm
 
 latent_sde = LatentSDEModel(beta=0).to(DEVICE).to(DTYPE)
 
@@ -26,10 +25,6 @@ class OdeModeContextManager:
 def duplicate_condition(conds, n):
     return {
         "encoder_hidden_states": conds["encoder_hidden_states"].repeat(n, 1, 1), 
-        "added_cond_kwargs": {
-            "text_embeds": conds["added_cond_kwargs"]["text_embeds"].repeat(n, 1), 
-            "time_ids": conds["added_cond_kwargs"]["time_ids"].repeat(n, 1)
-        },
     }
 
 def _get_f_g(t, x, prompts):
@@ -115,8 +110,7 @@ def odeint(x, text_cfg_dict, sample_step, start_t=14.648, end_t=2e-3):
         'cfgs': text_cfg_dict['cfgs'],
     }
     prev_t = ts[0]
-    progress_bar = tqdm(ts[1:], leave=False, position=1) if use_tqdm else ts
-    for t in progress_bar:
+    for t in ts[1:]:
         x = ode_step(x, t, prev_t, prompts)
         prev_t = t
     return x
