@@ -53,7 +53,7 @@ def qualitative_generate(
     imagereward=False,
     pickscore=False,
     hpsv2=False,
-    experiment_directory="experiments/qualitative_generate_1_5",
+    experiment_directory="experiments/qualitative_generate",
 ):
     global prompt
     prompt = text
