@@ -86,27 +86,21 @@ def qualitative_generate(
             with open(f'{self.log_dir}/config.json', 'w') as f:
                 json.dump(config, f, indent=4)
 
-    
     generator = QualitativeGenerater(
         beta=beta,
         tau=tau,
         action_num=action_num,
-        sample_step=sample_step,
-        cfg=cfg,
         weighting=weighting,
+        sample_step=sample_step,
+        timesteps=timesteps,
+        max_ode_steps=max_ode_steps,
+        ode_after=ode_after,
+        cfg=cfg,
         seed=seed,
-        experiment_directory=experiment_directory,
-        ode_after_sigma=0
+        experiment_directory=experiment_directory
     )
 
     generator.generate(prompt=text)
 
 if __name__ == '__main__':
     fire.Fire(qualitative_generate)
-
-# Experiments:
-# CUDA_VISIBLE_DEVICES=9 python3 pipelines/qualitative_generate.py --text="Symmetry Product render poster vivid colors divine proportion owl glowing fog intricate elegant highly detailed" --seed=42 --imagereward
-# CUDA_VISIBLE_DEVICES=8 python3 pipelines/qualitative_generate.py --text="Symmetry Product render poster vivid colors divine proportion owl glowing fog intricate elegant highly detailed" --seed=42 --aesthetic
-# CUDA_VISIBLE_DEVICES=7 python3 pipelines/qualitative_generate.py --text="Symmetry Product render poster vivid colors divine proportion owl glowing fog intricate elegant highly detailed" --seed=42 --pickscore
-# CUDA_VISIBLE_DEVICES=6 python3 pipelines/qualitative_generate.py --text="Symmetry Product render poster vivid colors divine proportion owl glowing fog intricate elegant highly detailed" --seed=42 --imagereward --pickscore
-# CUDA_VISIBLE_DEVICES=5 python3 pipelines/qualitative_generate.py --text="Symmetry Product render poster vivid colors divine proportion owl glowing fog intricate elegant highly detailed" --seed=42 --aesthetic --imagereward --pickscore

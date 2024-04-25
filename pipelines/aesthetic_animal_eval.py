@@ -14,6 +14,7 @@ import numpy as np
 from api import add_noise, get_init_latent, demon_sampling
 from utils import from_latent_to_pil
 from reward_models.AestheticScorer import AestheticScorer
+from config import DTYPE, FILE_PATH
 
 aesthetic_scorer = AestheticScorer()
 
@@ -94,7 +95,9 @@ def aesthetic_animal_eval(
         "ode_after": ode_after,
         "cfg": cfg,
         "seed": seed,
-        "log_dir": log_dir
+        "log_dir": log_dir,
+        "dtype": str(DTYPE),
+        "file_path": FILE_PATH,
     }
 
     with open(f'{log_dir}/config.json', 'w') as f:
@@ -105,6 +108,7 @@ def aesthetic_animal_eval(
     animals = read_animals('assets/very_simple_animal.txt')
     
     scores = []
+    start_time = datetime.now()
     for prompt in tqdm(animals):
         prompts = {
             "prompts": [prompt],
@@ -132,12 +136,14 @@ def aesthetic_animal_eval(
         
         scores.append(aesthetic_scorer(pil).item())
     
+    config["time"] =  (datetime.now() - start_time).total_seconds() / len(animals)
     scores = np.array(scores)
+    # Find the time per instance
     config["score"] = np.mean(scores).item()
     config["score_std"] = np.std(scores).item()
 
     with open(f'{log_dir}/config.json', 'w') as f:
-        json.dump(config, f)
+        json.dump(config, f, indent=4)
 
 
 if __name__ == '__main__':

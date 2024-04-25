@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Local application/library specific imports
-from api import demon_sampling, get_init_latent, from_latent_to_pil, odeint
+from api import demon_sampling, get_init_latent, odeint
+from utils import from_latent_to_pil
 from abc import ABC, abstractmethod
 
 

@@ -5,7 +5,6 @@ import numpy as np
 from karras import LatentSDEModel
 from utils import get_condition
 from config import DEVICE, DTYPE
-from tqdm import tqdm
 
 latent_sde = LatentSDEModel(beta=0).to(DEVICE).to(DTYPE)
 
@@ -115,7 +114,7 @@ def odeint(x, text_cfg_dict, sample_step, start_t=14.648, end_t=2e-3):
         'cfgs': text_cfg_dict['cfgs'],
     }
     prev_t = ts[0]
-    progress_bar = tqdm(ts[1:], leave=False, position=1) if use_tqdm else ts
+    progress_bar = ts[1:]
     for t in progress_bar:
         x = ode_step(x, t, prev_t, prompts)
         prev_t = t
