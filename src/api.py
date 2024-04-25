@@ -93,7 +93,7 @@ def best_stepnum(t, sigma_max=14.6488, sigma_min=2e-3, max_ode_step=18, RHO=7):
 @OdeModeContextManager()
 @torch.inference_mode()
 def odeint_rest(x, start_t, ts, prompts, max_ode_steps=18):
-    steps = best_stepnum(start_t, max_ode_step=max_ode_steps) + 2
+    steps = best_stepnum(start_t.item(), max_ode_step=max_ode_steps) + 2
     ts = latent_sde.get_karras_timesteps(steps, start_t, sigma_min=ts[-1])
     prev_t, ts = ts[0], ts[1:]
     for t in ts:
