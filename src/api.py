@@ -202,7 +202,7 @@ def demon_sampling(x,
         values = values - values.mean()
         
         if tau == 'adaptive':
-            tau = values.std().item()
+            tau = values.std().item() + 1e-6
 
         if weighting == "spin":
             weights = torch.tanh(values / tau)

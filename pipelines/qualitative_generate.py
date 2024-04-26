@@ -49,6 +49,7 @@ def qualitative_generate(
     text=None,
     cfg=2,
     seed=None,
+    save_pils=False,
     aesthetic=False,
     imagereward=False,
     pickscore=False,
@@ -97,6 +98,7 @@ def qualitative_generate(
         ode_after=ode_after,
         cfg=cfg,
         seed=seed,
+        save_pils=save_pils,
         experiment_directory=experiment_directory
     )
 
