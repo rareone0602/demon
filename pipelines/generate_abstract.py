@@ -13,6 +13,7 @@ from api import demon_sampling, get_init_latent, from_latent_to_pil, odeint
 from abc import ABC, abstractmethod
 
 
+
 class DemonGenerater(ABC):
 
     def __init__(
