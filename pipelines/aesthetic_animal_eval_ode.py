@@ -18,19 +18,6 @@ from config import DTYPE, FILE_PATH
 
 aesthetic_scorer = AestheticScorer()
 
-def rewards(xs):
-    """
-    Calculate the aesthetic score of an image.
-    """
-    pils = from_latent_to_pil(xs)
-    """
-    os.makedirs(f'tmp/trajectory', exist_ok=True)
-    nowtime = int(datetime.now().timestamp() * 1e6)
-    for i, pil in enumerate(pils):
-        pil.save(f'tmp/trajectory/{nowtime}_{i}.png')
-    """
-    return aesthetic_scorer(pils).cpu().numpy().tolist()
-
 def read_animals(file_path):
     """
     Read a file containing a list of animals.
@@ -40,17 +27,11 @@ def read_animals(file_path):
     return animals
 
 def aesthetic_animal_eval(
-    beta=.5,
-    tau='adaptive',
-    action_num=16,
-    weighting="spin",
     sample_step=64,
     timesteps="karras",
-    max_ode_steps=20,
-    ode_after=0.11,
     cfg=2,
     seed=42,
-    experiment_directory="experiments/aesthetic_animal_eval",
+    experiment_directory="experiments/ode_only",
 ):
     """
     Evaluate the aesthetic score of animals using latent space optimization.
@@ -60,14 +41,8 @@ def aesthetic_animal_eval(
     os.makedirs(log_dir, exist_ok=False)
 
     config = {
-        "beta": beta,
-        "tau": tau,
-        "action_num": action_num,
-        "weighting": weighting,
         "sample_step": sample_step,
         "timesteps": timesteps,
-        "max_ode_steps": max_ode_steps,
-        "ode_after": ode_after,
         "cfg": cfg,
         "seed": seed,
         "log_dir": log_dir,
@@ -112,4 +87,4 @@ def aesthetic_animal_eval(
 if __name__ == '__main__':
     fire.Fire(aesthetic_animal_eval)
 
-# python3 pipelines/aesthetic_animal_eval.py --beta 0.5 --tau 0.1 --action_num 8 --sample_step 30 --weighting spin
+# python3 pipelines/aesthetic_animal_eval_ode.py
