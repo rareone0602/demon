@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Local application/library specific imports
-from api import demon_sampling, get_init_latent, from_latent_to_pil, odeint
+from api import demon_sampling, get_init_latent, odeint
+from utils import from_latent_to_pil
 from abc import ABC, abstractmethod
-
 
 
 class DemonGenerater(ABC):
@@ -132,8 +132,9 @@ class DemonGenerater(ABC):
                 self.beta,
                 self.tau,
                 self.action_num,
-                self.sample_step,
                 self.weighting,
+                self.sample_step,
+                self.timesteps,
                 max_ode_steps=self.max_ode_steps,
                 ode_after=self.ode_after,
                 log_dir=self.log_dir,
