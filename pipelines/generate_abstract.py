@@ -113,22 +113,27 @@ class DemonGenerater(ABC):
         with open(f'{self.log_dir}/config.json', 'w') as f:
             json.dump(self.config, f, indent=4)
         
-        prompts = {
-            "prompts": [prompt if prompt is not None else ""],
-            "cfgs": [self.cfg]
-        }
-
-        if ode:
-            latent = odeint(
-                get_init_latent(),
-                prompts,
-                self.sample_step,
+        latent = get_init_latent()
+        
+        from_latent_to_pil(
+            odeint(
+                latent,
+                {
+                    "prompts": [prompt if prompt is not None else ""],
+                    "cfgs": [self.cfg]
+                },
+                self.sample_step
             )
-        else:
+        ).save(f'{self.log_dir}/init.png')
+
+        if not ode:
             latent = demon_sampling(
-                get_init_latent(),
+                latent,
                 self.rewards_latent,
-                prompts,
+                {
+                    "prompts": [prompt if prompt is not None else ""],
+                    "cfgs": [self.cfg]
+                },
                 self.beta,
                 self.tau,
                 self.action_num,
