@@ -199,27 +199,24 @@ def demon_sampling(x,
             with open(f"{log_dir}/expected_energy.txt", "a") as f:
                 f.write(f"{values.mean().item()} {values.std().item()} {t.item()}\n")
 
-        values = values - values.mean()
         
         if tau == 'adaptive':
             tau = values.std().item()
         
         if weighting == "spin":
+            values = values - values.mean()
             weights = torch.tanh(values / tau)
         elif weighting == "boltzmann":
-            weights = F.softmax(values / tau, dim=0)
+            stabilized_values = values - torch.max(values)
+            weights = F.softmax(stabilized_values / tau, dim=0)
         else:
             raise ValueError(f"Unknown weighting: {weighting}")
-        
         if values.std().item() < 1e-8:
-            z = zs[0:1]
-        else:
-            z = F.normalize((zs * weights.view(-1, 1, 1, 1)).sum(dim=0, keepdim=True), dim=(0, 1, 2, 3)) # (1, C, H, W)
-            z *= x.numel()**0.5
-        
+            weights = torch.ones_like(weights)
+        z = F.normalize((zs * weights.view(-1, 1, 1, 1)).sum(dim=0, keepdim=True), dim=(0, 1, 2, 3)) # (1, C, H, W)
+        z *= x.numel()**0.5
         x = sde_step(x, t, prev_t, prompts, z)
         prev_t = t
-    
     return x
 
 def add_noise(latent, t):
