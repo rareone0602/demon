@@ -193,15 +193,16 @@ def demon_sampling(x,
             with open(f"{log_dir}/expected_energy.txt", "a") as f:
                 f.write(f"{values.mean().item()} {values.std().item()} {t.item()}\n")
 
-        values = values - values.mean()
         
         if tau == 'adaptive':
             tau = values.std().item()
 
         if weighting == "spin":
+            values = values - values.mean()
             weights = torch.tanh(values / tau)
         elif weighting == "boltzmann":
-            weights = F.softmax(values / tau, dim=0)
+            stabilized_values = values - torch.max(values)
+            weights = F.softmax(stabilized_values / tau, dim=0)
         else:
             raise ValueError(f"Unknown weighting: {weighting}")
 
