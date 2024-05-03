@@ -205,7 +205,8 @@ def demon_sampling(x,
             weights = F.softmax(stabilized_values / tau, dim=0)
         else:
             raise ValueError(f"Unknown weighting: {weighting}")
-
+        if values.std().item() < 1e-8:
+            weights = torch.ones_like(weights)
         z = F.normalize((zs * weights.view(-1, 1, 1, 1)).sum(dim=0, keepdim=True), dim=(0, 1, 2, 3)) # (1, C, H, W)
         z *= x.numel()**0.5
         x = sde_step(x, t, prev_t, prompts, z)
