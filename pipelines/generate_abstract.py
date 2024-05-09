@@ -145,7 +145,5 @@ class DemonGenerater(ABC):
                 log_dir=self.log_dir,
             )
         
-        from_latent_to_pil(latent).save(f'{self.log_dir}/out.png')
-    
-        if not ode:
+            from_latent_to_pil(latent).save(f'{self.log_dir}/out.png')
             self.generate_pyplot(f"{self.log_dir}/expected_energy.txt", f"{self.log_dir}/expected_energy.png")
