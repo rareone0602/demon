@@ -11,7 +11,7 @@ import fire
 import numpy as np
 
 # Local Application/Library Specific Imports
-from api import add_noise, get_init_latent, demon_sampling
+from api import add_noise, get_init_latent, adhoc_demon_sampling
 from utils import from_latent_to_pil
 from reward_models.AestheticScorer import AestheticScorer
 from config import DTYPE, FILE_PATH
@@ -48,7 +48,7 @@ def generate_pyplot(log_txt, out_img_file):
     ts = []
     with open(log_txt, "r") as f:
         for line in f.readlines():
-            score, std_dev, t, _ = map(float, line.split())
+            score, std_dev, t = map(float, line.split())
             scores.append(score)
             std_devs.append(std_dev)
             ts.append(t)
@@ -65,6 +65,7 @@ def generate_pyplot(log_txt, out_img_file):
     plt.close()
 
 def aesthetic_animal_eval(
+    best_of_N_step=16,
     beta=.5,
     tau='adaptive',
     action_num=16,
@@ -115,8 +116,8 @@ def aesthetic_animal_eval(
             "cfgs": [cfg]
         }
         os.mkdir(os.path.join(log_dir, prompt))
-        latent = demon_sampling(
-            get_init_latent(),
+        latent = adhoc_demon_sampling(
+            best_of_N_step,
             rewards,
             prompts,
             beta,
@@ -131,8 +132,6 @@ def aesthetic_animal_eval(
         )
         pil = from_latent_to_pil(latent)
         pil.save(os.path.join(log_dir, prompt, f"out.png"))
-        # generate_pyplot(os.path.join(log_dir, prompt, 'expected_energy.txt'), 
-        #                 os.path.join(log_dir, prompt, "expected_energy.png"))
         
         scores.append(aesthetic_scorer(pil).item())
     
