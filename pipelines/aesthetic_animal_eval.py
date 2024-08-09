@@ -48,7 +48,7 @@ def generate_pyplot(log_txt, out_img_file):
     ts = []
     with open(log_txt, "r") as f:
         for line in f.readlines():
-            score, std_dev, t = map(float, line.split())
+            score, std_dev, t, _ = map(float, line.split())
             scores.append(score)
             std_devs.append(std_dev)
             ts.append(t)
@@ -131,8 +131,8 @@ def aesthetic_animal_eval(
         )
         pil = from_latent_to_pil(latent)
         pil.save(os.path.join(log_dir, prompt, f"out.png"))
-        generate_pyplot(os.path.join(log_dir, prompt, 'expected_energy.txt'), 
-                        os.path.join(log_dir, prompt, "expected_energy.png"))
+        # generate_pyplot(os.path.join(log_dir, prompt, 'expected_energy.txt'), 
+        #                 os.path.join(log_dir, prompt, "expected_energy.png"))
         
         scores.append(aesthetic_scorer(pil).item())
     
@@ -149,4 +149,6 @@ def aesthetic_animal_eval(
 if __name__ == '__main__':
     fire.Fire(aesthetic_animal_eval)
 
-# python3 pipelines/aesthetic_animal_eval.py --beta 0.5 --tau 0.1 --action_num 8 --sample_step 30 --weighting spin
+# CUDA_VISIBLE_DEVICES=9
+# python3 pipelines/aesthetic_animal_eval.py \
+# --beta 0.1 --action_num 16 --sample_step 64 --experiment_directory "experiments/rebuttal/aesthetic_animal_eval"

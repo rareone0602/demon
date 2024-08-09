@@ -5,6 +5,7 @@ import numpy as np
 from karras import LatentSDEModel
 from utils import get_condition
 from config import DEVICE, DTYPE
+from datetime import datetime
 
 latent_sde = LatentSDEModel(beta=0).to(DEVICE).to(DTYPE)
 
@@ -137,6 +138,154 @@ def sdeint(x, text_cfg_dict, beta, sample_step, start_t=14.648, end_t=2e-3):
 
 
 @torch.inference_mode()
+def best_of_n_sampling(
+        best_of_n_step,
+        energy_fn, 
+        text_cfg_dict, 
+        beta, 
+        sample_step=20,
+        timesteps="karras",
+        max_ode_steps=20,
+        start_t=14.648,
+        end_t=2e-3,
+        log_dir=None):
+    
+    start_time = datetime.now()
+    latent_sde.change_noise(beta=beta)
+    
+    if timesteps == "karras":
+        ts = latent_sde.get_karras_timesteps(
+            T=sample_step,
+            sigma_max=start_t,
+            sigma_min=end_t
+        )
+    elif timesteps == "linear":
+        ts = latent_sde.get_linear_timesteps(
+            T=sample_step,
+            sigma_max=start_t,
+            sigma_min=end_t
+        )
+    else:
+        raise ValueError(f"Unknown timesteps: {timesteps}")
+    
+    text_cfg_dict['prompts'].append('')
+    prompts = {
+        'conditions': get_condition(text_cfg_dict['prompts']),
+        'cfgs': text_cfg_dict['cfgs'],
+    }
+    prev_t, ts = ts[0], ts[1:]
+
+    x = None
+    score = -1
+    
+    for _ in range(best_of_n_step):
+        cur_x = get_init_latent()
+        x_0 = odeint_rest(cur_x, prev_t, ts, prompts, max_ode_steps=max_ode_steps)
+        cur_score = energy_fn(x_0)[0]
+        if cur_score > score:
+            x, score = cur_x, cur_score
+        passed_seconds = (datetime.now() - start_time).total_seconds()
+        with open(f"{log_dir}/expected_energy.txt", "a") as f:
+                f.write(f"{score} 0 NA {passed_seconds}\n")
+    x_0 = odeint_rest(x, prev_t, ts, prompts, max_ode_steps=max_ode_steps)
+    return x_0
+
+
+@torch.inference_mode()
+def adhoc_demon_sampling(best_of_N_step,
+                         energy_fn, 
+                         text_cfg_dict, 
+                         beta, 
+                         tau, 
+                         action_num, 
+                         weighting, 
+                         sample_step,
+                         timesteps,
+                         max_ode_steps=20,
+                         ode_after=0,
+                         start_t=14.648,
+                         end_t=2e-3,
+                         log_dir=None):
+    start_time = datetime.now()
+    latent_sde.change_noise(beta=beta)
+    
+    if timesteps == "karras":
+        ts = latent_sde.get_karras_timesteps(
+            T=sample_step,
+            sigma_max=start_t,
+            sigma_min=end_t
+        )
+    elif timesteps == "linear":
+        ts = latent_sde.get_linear_timesteps(
+            T=sample_step,
+            sigma_max=start_t,
+            sigma_min=end_t
+        )
+    else:
+        raise ValueError(f"Unknown timesteps: {timesteps}")
+    
+    text_cfg_dict['prompts'].append('')
+    prompts = {
+        'conditions': get_condition(text_cfg_dict['prompts']),
+        'cfgs': text_cfg_dict['cfgs'],
+    }
+    prev_t, ts = ts[0], ts[1:]
+
+    x = None
+    score = -1
+    
+    for _ in range(best_of_N_step):
+        cur_x = get_init_latent()
+        x_0 = odeint_rest(cur_x, prev_t, ts, prompts, max_ode_steps=max_ode_steps)
+        cur_score = energy_fn(x_0)[0]
+        if cur_score > score:
+            x, score = cur_x, cur_score
+        passed_seconds = (datetime.now() - start_time).total_seconds()
+        with open(f"{log_dir}/expected_energy.txt", "a") as f:
+                f.write(f"{score} 0 NA {passed_seconds}\n")
+    
+
+    
+    while len(ts) > 0:
+        if prev_t < ode_after:
+            x = odeint_rest(x, prev_t, ts, prompts, max_ode_steps=max_ode_steps)
+            break
+        zs = torch.randn(action_num, *x.shape[1:], device=x.device, dtype=x.dtype)
+        
+        t, ts = ts[0], ts[1:]
+        next_xs = sde_step(x, t, prev_t, prompts, zs)    
+        
+        candidates_0 = odeint_rest(next_xs, t, ts, prompts, max_ode_steps=max_ode_steps)
+        
+        values = torch.tensor(energy_fn(candidates_0)).to(device=x.device, dtype=x.dtype)
+        
+        passed_seconds = (datetime.now() - start_time).total_seconds()
+        if log_dir is not None:
+            # Append values.mean().item() and values.std().item() to {log_dir}/sample_hist.txt
+            with open(f"{log_dir}/expected_energy.txt", "a") as f:
+                f.write(f"{values.mean().item()} {values.std().item()} {t.item()} {passed_seconds}\n")
+
+        
+        if tau == 'adaptive':
+            tau = values.std().item()
+        
+        if weighting == "spin":
+            values = values - values.mean()
+            weights = torch.tanh(values / tau)
+        elif weighting == "boltzmann":
+            stabilized_values = values - torch.max(values)
+            weights = F.softmax(stabilized_values / tau, dim=0)
+        else:
+            raise ValueError(f"Unknown weighting: {weighting}")
+        if values.std().item() < 1e-8:
+            weights = torch.ones_like(weights)
+        z = F.normalize((zs * weights.view(-1, 1, 1, 1)).sum(dim=0, keepdim=True), dim=(0, 1, 2, 3)) # (1, C, H, W)
+        z *= x.numel()**0.5
+        x = sde_step(x, t, prev_t, prompts, z)
+        prev_t = t
+    return x
+
+@torch.inference_mode()
 def demon_sampling(x, 
                    energy_fn, 
                    text_cfg_dict, 
@@ -175,6 +324,8 @@ def demon_sampling(x,
         'cfgs': text_cfg_dict['cfgs'],
     }
     prev_t, ts = ts[0], ts[1:]
+
+    start_time = datetime.now()
     while len(ts) > 0:
         if prev_t < ode_after:
             x = odeint_rest(x, prev_t, ts, prompts, max_ode_steps=max_ode_steps)
@@ -188,15 +339,16 @@ def demon_sampling(x,
         
         values = torch.tensor(energy_fn(candidates_0)).to(device=x.device, dtype=x.dtype)
         
+        passed_seconds = (datetime.now() - start_time).total_seconds()
         if log_dir is not None:
             # Append values.mean().item() and values.std().item() to {log_dir}/sample_hist.txt
             with open(f"{log_dir}/expected_energy.txt", "a") as f:
-                f.write(f"{values.mean().item()} {values.std().item()} {t.item()}\n")
+                f.write(f"{values.mean().item()} {values.std().item()} {t.item()} {passed_seconds}\n")
 
         
         if tau == 'adaptive':
             tau = values.std().item()
-
+        
         if weighting == "spin":
             values = values - values.mean()
             weights = torch.tanh(values / tau)
@@ -212,6 +364,7 @@ def demon_sampling(x,
         x = sde_step(x, t, prev_t, prompts, z)
         prev_t = t
     return x
+
 
 def add_noise(latent, t):
     z = torch.randn_like(latent)
