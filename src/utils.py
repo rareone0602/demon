@@ -33,9 +33,26 @@ def from_latent_to_pil(latents):
         return ret[0]
     else:
         return ret
-    
 @torch.inference_mode()
-def get_condition(text):
+def get_guidance_scale_embedding(w, embedding_dim=512, dtype=torch.float32):
+        """
+        See https://github.com/google-research/vdm/blob/dc27b98a554f65cdc654b800da5aa1846545d41b/model_vdm.py#L298
+        """
+        assert len(w.shape) == 1
+        w = w * 1000.0
+
+        half_dim = embedding_dim // 2
+        emb = torch.log(torch.tensor(10000.0)) / (half_dim - 1)
+        emb = torch.exp(torch.arange(half_dim, dtype=dtype) * -emb)
+        emb = w.to(dtype)[:, None] * emb[None, :]
+        emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=1)
+        if embedding_dim % 2 == 1:  # zero pad
+            emb = torch.nn.functional.pad(emb, (0, 1))
+        assert emb.shape == (w.shape[0], embedding_dim)
+        return emb
+
+@torch.inference_mode()
+def get_condition(text, time_cond=False):
     prompts = [text, text]
     prompt_embeds_list = []
     for prompt, tokenizer, text_encoder in zip(prompts, tokenizers, text_encoders):     
@@ -66,11 +83,20 @@ def get_condition(text):
 
     add_time_ids = torch.tensor(
         [[1024., 1024.,    0.,    0., 1024., 1024.]], 
-        dtype=torch.float16).to(DEVICE).repeat(len(text), 1)
+        dtype=torch.float16).to(DEVICE).repeat(bs_embed, 1)
     # The shape is square for experimentation purposes
-    
+
+    if time_cond:
+        guidance_scale_tensor = torch.zeros(bs_embed)
+        timestep_cond = get_guidance_scale_embedding(
+            guidance_scale_tensor, embedding_dim=256
+        ).to(device=DEVICE, dtype=DTYPE)
+    else:
+        timestep_cond = None
+
     return {
-        "encoder_hidden_states": prompt_embeds, 
+        "encoder_hidden_states": prompt_embeds,
+        "timestep_cond": timestep_cond,
         "added_cond_kwargs": {"text_embeds": add_text_embeds, "time_ids": add_time_ids},
     }
 
