@@ -64,14 +64,35 @@ def generate_pyplot(log_txt, out_img_file):
     plt.savefig(out_img_file)
     plt.close()
 
+def write_summary(log_dir, action_num):
+    animals = read_animals('assets/very_simple_animal.txt')
+    scores_across_animal = []
+    for prompt in animals:
+        data_file = os.path.join(log_dir, prompt, 'expected_energy.txt')
+        second_passed = []
+        scores_across_animal.append([])
+        with open(data_file, 'r') as f:
+            for line in f.readlines():
+                score, _, _, time = map(float, line.split())
+                second_passed.append(time)
+                scores_across_animal[-1].append(score)
+    scores_across_animal_mean = np.mean(scores_across_animal, axis=0)
+    scores_across_animal_std = np.std(scores_across_animal, axis=0)
+    second_passed = np.array(second_passed)    
+
+    with open(os.path.join(log_dir, 'expected_energy.txt'), 'w') as f:
+        for mean, std, t, i in zip(scores_across_animal_mean, scores_across_animal_std, second_passed, range(0, 1000, action_num)):
+            f.write(f"{mean} {std} {t} {i}\n")
+        
+
 def aesthetic_animal_eval(
     beta=.5,
     tau='adaptive',
     action_num=16,
     weighting="spin",
     sample_step=64,
-    timesteps="karras",
-    max_ode_steps=20,
+    r_of_c="baseline",
+    c_steps=20,
     ode_after=0.11,
     cfg=2,
     seed=42,
@@ -90,8 +111,8 @@ def aesthetic_animal_eval(
         "action_num": action_num,
         "weighting": weighting,
         "sample_step": sample_step,
-        "timesteps": timesteps,
-        "max_ode_steps": max_ode_steps,
+        "r_of_c": r_of_c,
+        "c_steps": c_steps,
         "ode_after": ode_after,
         "cfg": cfg,
         "seed": seed,
@@ -124,8 +145,8 @@ def aesthetic_animal_eval(
             action_num,
             weighting,
             sample_step,
-            timesteps,
-            max_ode_steps=max_ode_steps,
+            r_of_c,
+            c_steps=c_steps,
             ode_after=ode_after,
             log_dir=os.path.join(log_dir, prompt),
         )
@@ -144,11 +165,12 @@ def aesthetic_animal_eval(
 
     with open(f'{log_dir}/config.json', 'w') as f:
         json.dump(config, f, indent=4)
-
+    
+    write_summary(log_dir, action_num)
 
 if __name__ == '__main__':
-    fire.Fire(aesthetic_animal_eval)
-
+    # fire.Fire(aesthetic_animal_eval)
+    write_summary('experiments/aesthetic_animal_eval/2024-08-18_10-49-30', 16)
 # CUDA_VISIBLE_DEVICES=9
 # python3 pipelines/aesthetic_animal_eval.py \
 # --beta 0.1 --action_num 16 --sample_step 64 --experiment_directory "experiments/rebuttal/aesthetic_animal_eval"
