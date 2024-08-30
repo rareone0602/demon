@@ -169,8 +169,8 @@ def aesthetic_animal_eval(
     write_summary(log_dir, action_num)
 
 if __name__ == '__main__':
-    # fire.Fire(aesthetic_animal_eval)
-    write_summary('experiments/aesthetic_animal_eval/2024-08-18_10-49-30', 16)
+    fire.Fire(aesthetic_animal_eval)
+    
 # CUDA_VISIBLE_DEVICES=9
 # python3 pipelines/aesthetic_animal_eval.py \
 # --beta 0.1 --action_num 16 --sample_step 64 --experiment_directory "experiments/rebuttal/aesthetic_animal_eval"

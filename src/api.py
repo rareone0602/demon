@@ -237,16 +237,19 @@ def demon_sampling(x,
     }
 
     if r_of_c == "consistency":
-        cond = get_condition(text_cfg_dict['prompts'][:-1])
+        cond_one = get_condition(text_cfg_dict['prompts'][:-1])
         if action_num > 1:
-            cond = duplicate_condition(cond, action_num)
+            cond = duplicate_condition(cond_one, action_num)
 
     prev_t, ts = ts[0], ts[1:]
 
     start_time = datetime.now()
     while len(ts) > 0:
         if prev_t < ode_after:
-            x = odeint_rest(x, prev_t, ts, prompts, max_ode_steps=18)
+            if r_of_c == "consistency":
+                x = consistency_sampling(x, cond_one, sample_step=c_steps+1, start_t=prev_t)
+            elif r_of_c == "baseline":
+                x = odeint_rest(x, prev_t, ts, prompts, max_ode_steps=18)
             break
         zs = torch.randn(action_num, *x.shape[1:], device=x.device, dtype=x.dtype)
         
