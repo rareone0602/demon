@@ -23,8 +23,7 @@ class DemonGenerater(ABC):
             action_num=16, 
             weighting="spin",
             sample_step=64,
-            timesteps="karras",
-            max_ode_steps=20,
+            c_steps=20,
             ode_after=0.11,
             cfg=2,
             seed=None,
@@ -37,8 +36,7 @@ class DemonGenerater(ABC):
         self.action_num = action_num
         self.weighting = weighting
         self.sample_step = sample_step
-        self.timesteps = timesteps
-        self.max_ode_steps = max_ode_steps
+        self.c_steps = c_steps
         self.ode_after = ode_after
         self.cfg = cfg
         self.save_pils = save_pils
@@ -101,8 +99,7 @@ class DemonGenerater(ABC):
             "action_num": self.action_num,
             "weighting": self.weighting,
             "sample_step": self.sample_step,
-            "timesteps": self.timesteps,
-            "max_ode_steps": self.max_ode_steps,
+            "c_steps": self.c_steps,
             "ode_after": self.ode_after,            
             "prompt": prompt,
             "cfg": self.cfg,
@@ -139,8 +136,7 @@ class DemonGenerater(ABC):
                 self.action_num,
                 self.weighting,
                 self.sample_step,
-                self.timesteps,
-                max_ode_steps=self.max_ode_steps,
+                c_steps=self.c_steps,
                 ode_after=self.ode_after,
                 log_dir=self.log_dir,
             )
