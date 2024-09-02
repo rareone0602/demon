@@ -72,7 +72,7 @@ class DemonGenerater(ABC):
         ts = []
         with open(log_txt, "r") as f:
             for line in f.readlines():
-                score, std_dev, t = map(float, line.split())
+                score, std_dev, t, _ = map(float, line.split())
                 scores.append(score)
                 std_devs.append(std_dev)
                 ts.append(t)
