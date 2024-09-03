@@ -95,7 +95,8 @@ class LatentSDEModel(LatentModel):
     """
     def __init__(self, beta='anderson', const=None, path=FILE_PATH):
         super().__init__()
-        unet = UNet2DConditionModel.from_pretrained(path, subfolder='unet').to(dtype=DTYPE, device=DEVICE)
+        # unet = UNet2DConditionModel.from_pretrained(path, subfolder='unet').to(dtype=DTYPE, device=DEVICE)
+        unet = UNet2DConditionModel.from_pretrained("mhdang/dpo-sd1.5-text2image-v1", subfolder='unet').to(dtype=DTYPE, device=DEVICE)
         scheduler = KDPM2DiscreteScheduler.from_pretrained(path, subfolder='scheduler')
         self.sigma_score = SigmaScoreModel(unet, scheduler)
         self.change_noise(beta=beta, const=const)
