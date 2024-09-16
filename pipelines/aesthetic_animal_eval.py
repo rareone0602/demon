@@ -67,9 +67,9 @@ def generate_pyplot(log_txt, out_img_file):
 def aesthetic_animal_eval(
     beta=.5,
     tau='adaptive',
-    action_num=16,
+    K=16,
     weighting="spin",
-    sample_step=64,
+    T=64,
     r_of_c="baseline",
     c_steps=20,
     ode_after=0.11,
@@ -87,9 +87,9 @@ def aesthetic_animal_eval(
     config = {
         "beta": beta,
         "tau": tau,
-        "action_num": action_num,
+        "action_num": K,
         "weighting": weighting,
-        "sample_step": sample_step,
+        "sample_step": T,
         "r_of_c": r_of_c,
         "c_steps": c_steps,
         "ode_after": ode_after,
@@ -121,9 +121,9 @@ def aesthetic_animal_eval(
             prompts,
             beta,
             tau,
-            action_num,
+            K,
             weighting,
-            sample_step,
+            T,
             r_of_c,
             c_steps=c_steps,
             ode_after=ode_after,
@@ -151,4 +151,4 @@ if __name__ == '__main__':
 
 # CUDA_VISIBLE_DEVICES=9
 # python3 pipelines/aesthetic_animal_eval.py \
-# --beta 0.1 --action_num 16 --sample_step 64 --experiment_directory "experiments/rebuttal/aesthetic_animal_eval"
+# --beta 0.1 --K 16 --T 64 --experiment_directory "experiments/rebuttal/aesthetic_animal_eval"

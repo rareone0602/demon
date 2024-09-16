@@ -9,7 +9,7 @@ from config import DEVICE, DTYPE
 import copy
 
 latent_sde = LatentSDEModel(beta=0)
-latent_consistency = LatentConsistencyModel()
+# latent_consistency = LatentConsistencyModel()
 
 class OdeModeContextManager:
     def __enter__(self):
