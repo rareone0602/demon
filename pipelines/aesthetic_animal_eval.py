@@ -64,12 +64,33 @@ def generate_pyplot(log_txt, out_img_file):
     plt.savefig(out_img_file)
     plt.close()
 
+def write_summary(log_dir, action_num):
+    animals = read_animals('assets/very_simple_animal.txt')
+    scores_across_animal = []
+    for prompt in animals:
+        data_file = os.path.join(log_dir, prompt, 'expected_energy.txt')
+        second_passed = []
+        scores_across_animal.append([])
+        with open(data_file, 'r') as f:
+            for line in f.readlines():
+                score, _, _, time = map(float, line.split())
+                second_passed.append(time)
+                scores_across_animal[-1].append(score)
+    scores_across_animal_mean = np.mean(scores_across_animal, axis=0)
+    scores_across_animal_std = np.std(scores_across_animal, axis=0)
+    second_passed = np.array(second_passed)    
+
+    with open(os.path.join(log_dir, 'expected_energy.txt'), 'w') as f:
+        for mean, std, t, i in zip(scores_across_animal_mean, scores_across_animal_std, second_passed, range(0, 1000, action_num)):
+            f.write(f"{mean} {std} {t} {i}\n")
+        
+
 def aesthetic_animal_eval(
     beta=.5,
     tau='adaptive',
-    K=16,
+    action_num=16,
     weighting="spin",
-    T=64,
+    sample_step=64,
     r_of_c="baseline",
     c_steps=20,
     ode_after=0.11,
@@ -87,9 +108,9 @@ def aesthetic_animal_eval(
     config = {
         "beta": beta,
         "tau": tau,
-        "action_num": K,
+        "action_num": action_num,
         "weighting": weighting,
-        "sample_step": T,
+        "sample_step": sample_step,
         "r_of_c": r_of_c,
         "c_steps": c_steps,
         "ode_after": ode_after,
@@ -121,9 +142,9 @@ def aesthetic_animal_eval(
             prompts,
             beta,
             tau,
-            K,
+            action_num,
             weighting,
-            T,
+            sample_step,
             r_of_c,
             c_steps=c_steps,
             ode_after=ode_after,
@@ -144,11 +165,12 @@ def aesthetic_animal_eval(
 
     with open(f'{log_dir}/config.json', 'w') as f:
         json.dump(config, f, indent=4)
-
+    
+    write_summary(log_dir, action_num)
 
 if __name__ == '__main__':
     fire.Fire(aesthetic_animal_eval)
-
+    
 # CUDA_VISIBLE_DEVICES=9
 # python3 pipelines/aesthetic_animal_eval.py \
-# --beta 0.1 --K 16 --T 64 --experiment_directory "experiments/rebuttal/aesthetic_animal_eval"
+# --beta 0.1 --action_num 16 --sample_step 64 --experiment_directory "experiments/rebuttal/aesthetic_animal_eval"

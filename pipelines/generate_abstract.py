@@ -23,6 +23,7 @@ class DemonGenerater(ABC):
             action_num=16, 
             weighting="spin",
             sample_step=64,
+            r_of_c="baseline",
             c_steps=20,
             ode_after=0.11,
             cfg=2,
@@ -36,6 +37,7 @@ class DemonGenerater(ABC):
         self.action_num = action_num
         self.weighting = weighting
         self.sample_step = sample_step
+        self.r_of_c = r_of_c
         self.c_steps = c_steps
         self.ode_after = ode_after
         self.cfg = cfg
@@ -136,6 +138,7 @@ class DemonGenerater(ABC):
                 self.action_num,
                 self.weighting,
                 self.sample_step,
+                self.r_of_c,
                 c_steps=self.c_steps,
                 ode_after=self.ode_after,
                 log_dir=self.log_dir,

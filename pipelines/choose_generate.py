@@ -2,27 +2,40 @@
 import fire
 from image_grid import create_image_grid
 from generate_abstract import DemonGenerater
+from utils import from_latent_to_pil
+import os
+from datetime import datetime
 
 class ChooseGenerator(DemonGenerater):
-        def rewards(self, pils):
-            return create_image_grid(pils)
+    def rewards_latent(self, latents):
+        pils = from_latent_to_pil(latents)
+        rs = self.rewards(pils)
+        nowtime = int(datetime.now().timestamp() * 1e6)
+        if self.save_pils:
+            os.makedirs(f'{self.log_dir}/trajectory', exist_ok=True)
+            for i, (pil, r) in enumerate(zip(pils, rs)):
+                pil.save(f'{self.log_dir}/trajectory/{nowtime}_{i}_{r}.png')
+        
+        return rs
+        
+    def rewards(self, pils):
+        return create_image_grid(pils)
 
 def choose_generate(
-    beta=.1,
+    beta=.5,
     tau='adaptive',
     action_num=16,
     weighting="spin",
     sample_step=128,
-    timesteps="karras",
-    max_ode_steps=22,
+    c_steps=22,
+    r_of_c="baseline",
     ode_after=0.11,
     text=None,
-    cfg=2,
+    cfg=1,
     seed=None,
     save_pils=True,
     experiment_directory="experiments/choose_generate",
 ):
-
     
         
     generator = ChooseGenerator(
@@ -31,8 +44,8 @@ def choose_generate(
         action_num=action_num,
         weighting=weighting,
         sample_step=sample_step,
-        timesteps=timesteps,
-        max_ode_steps=max_ode_steps,
+        c_steps=c_steps,
+        r_of_c=r_of_c,
         ode_after=ode_after,
         cfg=cfg,
         seed=seed,
